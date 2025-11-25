@@ -1,18 +1,31 @@
 """
 Flask backend API for the car search tool
 """
-from flask import Flask, render_template, request, jsonify, g
+from flask import Flask, render_template, request, jsonify, g, session, redirect, url_for
 from flask_cors import CORS
 from search_coordinator import SearchCoordinator
 import traceback
 import sqlite3
 import os
 from datetime import datetime
+from functools import wraps
 
 DATABASE = 'notes.db'
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
 CORS(app)  # Enable CORS for frontend
+
+# Password protection - password is "car"
+APP_PASSWORD = os.environ.get('APP_PASSWORD', 'car')
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('authenticated'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -47,7 +60,23 @@ def init_db():
 # Initialize DB on start
 init_db()
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == APP_PASSWORD:
+            session['authenticated'] = True
+            return redirect(url_for('index'))
+        return render_template('login.html', error='Invalid password')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('authenticated', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@require_auth
 def index():
     """Serve the main page"""
     return render_template('index.html')
