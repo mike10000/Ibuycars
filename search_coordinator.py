@@ -19,7 +19,7 @@ class SearchCoordinator:
     def __init__(self):
         self.scrapers = [
             CraigslistScraper(),
-            AutoTraderScraper(),
+            # AutoTraderScraper(),  # Disabled - not working
             CarsComScraper(),
             # FacebookScraper(),  # Commented out by default due to complexity
         ]
@@ -67,7 +67,7 @@ class SearchCoordinator:
                 scraper = future_to_scraper[future]
                 try:
                     # Set a timeout for each scraper to prevent hanging
-                    listings = future.result(timeout=15)
+                    listings = future.result(timeout=12)
                     results[scraper.source_name] = listings
                     print(f"[OK] Found {len(listings)} listings on {scraper.source_name}")
                 except Exception as e:
