@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iBuyCars - Find Your Perfect Used Car</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="iBuyCars Logo">
+                </div>
+                <nav class="nav">
+                    <a href="#search" class="nav-link">Search</a>
+                    <a href="#notes" class="nav-link" id="navNotes">My Notes</a>
+                    <a href="#about" class="nav-link">About</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h2 class="hero-title">Search Thousands of Used Cars</h2>
+                <p class="hero-subtitle">Find the perfect car from multiple sources in one place</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Search Form -->
+    <section id="search" class="search-section">
+        <div class="container">
+            <div class="search-card">
+                <h3 class="search-title">Search for Your Dream Car</h3>
+                <form id="searchForm" class="search-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="make">Make(s) <small>(comma-separated)</small></label>
+                            <input type="text" id="make" name="make" placeholder="e.g., Toyota, Honda, Ford">
+                            <small class="form-hint">Enter one or more makes separated by commas</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="model">Model <small>(optional)</small></label>
+                            <input type="text" id="model" name="model" placeholder="e.g., Camry, Civic, F-150">
+                            <small class="form-hint">Leave blank to search all models</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="year_min">Min Year</label>
+                            <input type="number" id="year_min" name="year_min" placeholder="2010" min="1900" max="2025">
+                        </div>
+                        <div class="form-group">
+                            <label for="year_max">Max Year</label>
+                            <input type="number" id="year_max" name="year_max" placeholder="2024" min="1900" max="2025">
+                        </div>
+                        <div class="form-group">
+                            <label for="price_min">Min Price ($)</label>
+                            <input type="number" id="price_min" name="price_min" placeholder="5000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="price_max">Max Price ($)</label>
+                            <input type="number" id="price_max" name="price_max" placeholder="30000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="location">Location / ZIP *</label>
+                            <input type="text" id="location" name="location" placeholder="e.g., Miami, FL or 33922"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="max_results">Results per Site</label>
+                            <input type="number" id="max_results" name="max_results" value="20" min="1" max="100">
+                        </div>
+                    </div>
+                    <div class="form-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="private_sellers_only" name="private_sellers_only">
+                            <span>Private Sellers Only</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable_facebook" name="enable_facebook">
+                            <span>Include Facebook Marketplace (requires Chrome)</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-search" id="searchBtn">
+                        <span class="btn-text">Search Cars</span>
+                        <span class="btn-loader" style="display: none;">⏳ Searching...</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results" class="results-section" style="display: none;">
+        <div class="container">
+            <div class="results-header">
+                <h3 class="results-title">Search Results</h3>
+                <div id="resultsSummary" class="results-summary"></div>
+            </div>
+            <div id="resultsContainer" class="results-grid"></div>
+            <div id="noResults" class="no-results" style="display: none;">
+                <p>No results found. Try adjusting your search parameters.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Notes Section -->
+    <section id="notes" class="notes-section" style="display: none;">
+        <div class="container">
+            <div class="results-header">
+                <h3 class="results-title">My Saved Notes</h3>
+            </div>
+            <div id="notesContainer" class="results-grid">
+                <!-- Notes will be populated here -->
+            </div>
+            <div id="noNotes" class="no-results" style="display: none;">
+                <p>You haven't saved any notes yet.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Note Modal -->
+    <div id="noteModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h3>Add Note</h3>
+            <p id="modalCarTitle" class="modal-car-title"></p>
+            <form id="noteForm">
+                <input type="hidden" id="noteUrl">
+                <input type="hidden" id="noteTitle">
+                <input type="hidden" id="notePrice">
+                <input type="hidden" id="noteSource">
+                <input type="hidden" id="noteImage">
+                <div class="form-group">
+                    <label for="noteText">Your Note:</label>
+                    <textarea id="noteText" name="noteText" rows="4" placeholder="Enter your notes here..."
+                        required></textarea>
+                </div>
+                <button type="submit" class="btn-search">Save Note</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Searching multiple websites...</p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 iBuyCars. Search across multiple car listing websites.</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+
+</html>
