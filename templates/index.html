@@ -83,11 +83,11 @@
                     </div>
                     <div class="form-options">
                         <label class="checkbox-label">
-                            <input type="checkbox" id="private_sellers_only" name="private_sellers_only">
+                            <input type="checkbox" id="private_sellers_only" name="private_sellers_only" checked>
                             <span>Private Sellers Only</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" id="enable_facebook" name="enable_facebook">
+                            <input type="checkbox" id="enable_facebook" name="enable_facebook" checked>
                             <span>Include Facebook Marketplace (requires Chrome)</span>
                         </label>
                     </div>
@@ -153,8 +153,38 @@
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-        <div class="loading-spinner"></div>
-        <p class="loading-text">Searching multiple websites...</p>
+        <div class="loading-container">
+            <!-- Animated Car -->
+            <div class="car-animation">
+                <div class="car">
+                    <div class="car-body">
+                        <div class="car-top"></div>
+                        <div class="car-window"></div>
+                    </div>
+                    <div class="car-wheels">
+                        <div class="wheel wheel-front"></div>
+                        <div class="wheel wheel-back"></div>
+                    </div>
+                    <div class="car-lights"></div>
+                </div>
+            </div>
+
+            <!-- Road Animation -->
+            <div class="road">
+                <div class="road-line"></div>
+                <div class="road-line"></div>
+                <div class="road-line"></div>
+            </div>
+
+            <!-- Loading Text -->
+            <p class="loading-text">
+                <span class="loading-emoji">🚗</span>
+                <span id="loadingMessage">Searching multiple websites...</span>
+                <span class="loading-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                </span>
+            </p>
+        </div>
     </div>
 
     <!-- Footer -->

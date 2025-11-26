@@ -70,7 +70,7 @@ class BaseScraper(ABC):
                 'Upgrade-Insecure-Requests': '1',
             })
             
-            response = self.session.get(url, params=params, timeout=15)
+            response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
             
             # Check if we got blocked
