@@ -20,6 +20,51 @@ document.addEventListener('DOMContentLoaded', function () {
     const closeModal = document.querySelector('.close-modal');
     const noteForm = document.getElementById('noteForm');
 
+    // Vehicle Program Data
+    const PROGRAM_MAKES = {
+        exotic: [
+            'Aston Martin', 'Bentley', 'Ferrari', 'Lamborghini', 'Maserati',
+            'McLaren', 'Rolls Royce'
+        ],
+        high_end: [
+            'Acura', 'Alfa Romeo', 'Audi', 'BMW', 'Hummer', 'Infiniti', 'Jaguar',
+            'Lexus', 'Lincoln', 'Lotus', 'Lucid', 'Mercedes-Benz', 'Mini',
+            'Polestar', 'Porsche', 'Rivian', 'Tesla', 'Volvo'
+        ],
+        flagship: [
+            'Buick', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge', 'Fiat', 'Ford',
+            'Genesis', 'GMC', 'Honda', 'Hyundai', 'Jeep', 'Kia', 'Land Rover',
+            'Mazda', 'Mitsubishi', 'Nissan', 'Oldsmobile', 'Pontiac', 'RAM',
+            'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 'Toyota', 'Volkswagen'
+        ]
+    };
+
+    // Vehicle Program Logic
+    const vehicleProgramSelect = document.getElementById('vehicle_program');
+    const makeInput = document.getElementById('make');
+
+    if (vehicleProgramSelect) {
+        // Handle program selection
+        vehicleProgramSelect.addEventListener('change', function () {
+            const program = this.value;
+            if (program && PROGRAM_MAKES[program]) {
+                makeInput.value = PROGRAM_MAKES[program].join(', ');
+            } else {
+                // If "Custom" is selected, we could clear it, or leave it. 
+                // Let's clear it to avoid confusion if they switch back to custom explicitly.
+                if (program === '') {
+                    makeInput.value = '';
+                }
+            }
+        });
+
+        // Handle manual make input changes
+        makeInput.addEventListener('input', function () {
+            // If user types manually, reset program to "Custom"
+            vehicleProgramSelect.value = '';
+        });
+    }
+
     // Form submission
     searchForm.addEventListener('submit', async function (e) {
         e.preventDefault();

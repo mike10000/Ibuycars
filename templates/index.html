@@ -46,6 +46,15 @@
                 <form id="searchForm" class="search-form">
                     <div class="form-grid">
                         <div class="form-group">
+                            <label for="vehicle_program">Vehicle Program <small>(optional)</small></label>
+                            <select id="vehicle_program" name="vehicle_program" class="form-select">
+                                <option value="">Custom (Select Manually)</option>
+                                <option value="exotic">Exotic Program</option>
+                                <option value="high_end">High End Program</option>
+                                <option value="flagship">Flagship Program</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="make">Make(s) <small>(comma-separated)</small></label>
                             <input type="text" id="make" name="make" placeholder="e.g., Toyota, Honda, Ford">
                             <small class="form-hint">Enter one or more makes separated by commas</small>
