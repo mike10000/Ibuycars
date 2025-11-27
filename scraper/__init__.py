@@ -6,6 +6,7 @@ from scraper.craigslist_scraper import CraigslistScraper
 from scraper.autotrader_scraper import AutoTraderScraper
 from scraper.cars_com_scraper import CarsComScraper
 from scraper.facebook_scraper import FacebookScraper
+from scraper.offerup_scraper import OfferUpScraper
 
 __all__ = [
     'BaseScraper',
@@ -13,6 +14,7 @@ __all__ = [
     'CraigslistScraper',
     'AutoTraderScraper',
     'CarsComScraper',
-    'FacebookScraper'
+    'FacebookScraper',
+    'OfferUpScraper'
 ]
 

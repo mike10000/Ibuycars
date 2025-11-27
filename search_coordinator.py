@@ -7,6 +7,7 @@ from scraper import (
     AutoTraderScraper,
     CarsComScraper,
     FacebookScraper,
+    OfferUpScraper,
     CarListing
 )
 import concurrent.futures
@@ -21,6 +22,7 @@ class SearchCoordinator:
             CraigslistScraper(),
             # AutoTraderScraper(),  # Disabled - not working
             CarsComScraper(),
+            OfferUpScraper(),
             # FacebookScraper(),  # Commented out by default due to complexity
         ]
     
