@@ -9,6 +9,8 @@ import sqlite3
 import os
 from datetime import datetime
 from functools import wraps
+from crm_db import init_leads_db
+from crm_routes import register_crm_routes
 
 DATABASE = 'notes.db'
 
@@ -43,19 +45,8 @@ def close_connection(exception):
 def init_db():
     with app.app_context():
         db = get_db()
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT NOT NULL,
-                title TEXT,
-                price TEXT,
-                source TEXT,
-                image_url TEXT,
-                note TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        db.commit()
+        # Initialize CRM leads table
+        init_leads_db(db)
 
 # Initialize DB on start
 init_db()
@@ -76,7 +67,6 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
-@require_auth
 def index():
     """Serve the main page"""
     return render_template('index.html')
