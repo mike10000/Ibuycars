@@ -20,6 +20,51 @@ document.addEventListener('DOMContentLoaded', function () {
     const closeModal = document.querySelector('.close-modal');
     const noteForm = document.getElementById('noteForm');
 
+    // Vehicle Program Data
+    const PROGRAM_MAKES = {
+        exotic: [
+            'Aston Martin', 'Bentley', 'Ferrari', 'Lamborghini', 'Maserati',
+            'McLaren', 'Rolls Royce'
+        ],
+        high_end: [
+            'Acura', 'Alfa Romeo', 'Audi', 'BMW', 'Hummer', 'Infiniti', 'Jaguar',
+            'Lexus', 'Lincoln', 'Lotus', 'Lucid', 'Mercedes-Benz', 'Mini',
+            'Polestar', 'Porsche', 'Rivian', 'Tesla', 'Volvo'
+        ],
+        flagship: [
+            'Buick', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge', 'Fiat', 'Ford',
+            'Genesis', 'GMC', 'Honda', 'Hyundai', 'Jeep', 'Kia', 'Land Rover',
+            'Mazda', 'Mitsubishi', 'Nissan', 'Oldsmobile', 'Pontiac', 'RAM',
+            'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 'Toyota', 'Volkswagen'
+        ]
+    };
+
+    // Vehicle Program Logic
+    const vehicleProgramSelect = document.getElementById('vehicle_program');
+    const makeInput = document.getElementById('make');
+
+    if (vehicleProgramSelect) {
+        // Handle program selection
+        vehicleProgramSelect.addEventListener('change', function () {
+            const program = this.value;
+            if (program && PROGRAM_MAKES[program]) {
+                makeInput.value = PROGRAM_MAKES[program].join(', ');
+            } else {
+                // If "Custom" is selected, we could clear it, or leave it. 
+                // Let's clear it to avoid confusion if they switch back to custom explicitly.
+                if (program === '') {
+                    makeInput.value = '';
+                }
+            }
+        });
+
+        // Handle manual make input changes
+        makeInput.addEventListener('input', function () {
+            // If user types manually, reset program to "Custom"
+            vehicleProgramSelect.value = '';
+        });
+    }
+
     // Form submission
     searchForm.addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -38,6 +83,10 @@ document.addEventListener('DOMContentLoaded', function () {
             location: document.getElementById('location').value.trim() || null,
             max_results: parseInt(document.getElementById('max_results').value) || 20,
             enable_facebook: document.getElementById('enable_facebook').checked,
+            enable_craigslist: document.getElementById('enable_craigslist').checked,
+            enable_cars_com: document.getElementById('enable_cars_com').checked,
+            enable_offerup: document.getElementById('enable_offerup').checked,
+            enable_autotrader: document.getElementById('enable_autotrader').checked,
             private_sellers_only: document.getElementById('private_sellers_only').checked
         };
 
@@ -207,15 +256,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${details.length > 0 ? `<div class="car-details">${details.join('')}</div>` : ''}
                 <div class="car-footer">
                     <span class="source-badge ${sourceClass}">${listing.source}</span>
-                    <button class="btn-note" data-url="${listing.url}" data-title="${listing.title}" data-price="${listing.price}" data-source="${listing.source}" data-image="${listing.image_url || ''}">📝 Note</button>
-                    <a href="${listing.url}" target="_blank" class="view-link">View Listing →</a>
+                    <div class="car-actions">
+                        <button class="btn-note" data-url="${listing.url}" data-title="${listing.title}" data-price="${listing.price}" data-source="${listing.source}" data-image="${listing.image_url || ''}">📝 Notes</button>
+                        <select class="lead-status-dropdown" data-url="${listing.url}" data-title="${listing.title}" data-price="${listing.price}" data-source="${listing.source}" data-image="${listing.image_url || ''}">
+                            <option value="Not Contacted" style="background-color: #6c757d; color: white;">Not Contacted</option>
+                            <option value="Pending" style="background-color: #ffc107; color: black;">Pending</option>
+                            <option value="Captured" style="background-color: #28a745; color: white;">Captured</option>
+                            <option value="Rejected" style="background-color: #dc3545; color: white;">Rejected</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         `;
 
+        // Set initial status from localStorage
+        const leads = getLeads();
+        const existingLead = leads.find(l => l.url === listing.url);
+        const dropdown = card.querySelector('.lead-status-dropdown');
+
+        if (existingLead && existingLead.status) {
+            dropdown.value = existingLead.status;
+        }
+
+        // Update dropdown background color based on selection
+        updateDropdownColor(dropdown);
+
         // Add click handler to open link
         card.addEventListener('click', function (e) {
             if (e.target.closest('.btn-note')) {
+                e.stopPropagation();
                 const btn = e.target.closest('.btn-note');
                 openNoteModal({
                     url: btn.dataset.url,
@@ -224,9 +293,44 @@ document.addEventListener('DOMContentLoaded', function () {
                     source: btn.dataset.source,
                     image_url: btn.dataset.image
                 });
-            } else if (!e.target.closest('.view-link')) {
+            } else if (e.target.closest('.lead-status-dropdown')) {
+                e.stopPropagation();
+                // Dropdown click is handled by change event below
+            } else {
                 window.open(listing.url, '_blank');
             }
+        });
+
+        // Handle status change
+        dropdown.addEventListener('change', function (e) {
+            e.stopPropagation();
+            const newStatus = this.value;
+            updateDropdownColor(this);
+
+            // Save or update lead with new status
+            const leads = getLeads();
+            const existingIndex = leads.findIndex(l => l.url === listing.url);
+
+            const leadData = {
+                id: existingIndex >= 0 ? leads[existingIndex].id : Date.now(),
+                url: listing.url,
+                title: listing.title,
+                price: listing.price,
+                source: listing.source,
+                image_url: listing.image_url || '',
+                notes: existingIndex >= 0 ? leads[existingIndex].notes : '',
+                status: newStatus,
+                created_at: existingIndex >= 0 ? leads[existingIndex].created_at : new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            if (existingIndex >= 0) {
+                leads[existingIndex] = leadData;
+            } else {
+                leads.unshift(leadData);
+            }
+
+            saveLeads(leads);
         });
 
         return card;
@@ -254,6 +358,59 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Local Storage Key
+    const STORAGE_KEY = 'ibuycars_leads';
+
+    // Helper to get leads
+    function getLeads() {
+        const leads = localStorage.getItem(STORAGE_KEY);
+        return leads ? JSON.parse(leads) : [];
+    }
+
+    // Helper to save leads
+    function saveLeads(leads) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+    }
+
+    // Save Note (Lead)
+    noteForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const leads = getLeads();
+        const url = document.getElementById('noteUrl').value;
+
+        // Check if already exists
+        const existingIndex = leads.findIndex(l => l.url === url);
+
+        const leadData = {
+            id: existingIndex >= 0 ? leads[existingIndex].id : Date.now(),
+            url: url,
+            title: document.getElementById('noteTitle').value,
+            price: document.getElementById('notePrice').value,
+            source: document.getElementById('noteSource').value,
+            image_url: document.getElementById('noteImage').value,
+            notes: document.getElementById('noteText').value,
+            status: existingIndex >= 0 ? leads[existingIndex].status : 'New',
+            created_at: existingIndex >= 0 ? leads[existingIndex].created_at : new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+
+        if (existingIndex >= 0) {
+            leads[existingIndex] = leadData;
+        } else {
+            leads.unshift(leadData);
+        }
+
+        saveLeads(leads);
+
+        noteModal.style.display = 'none';
+        alert('Lead saved successfully!');
+
+        if (notesSection.style.display === 'block') {
+            loadNotes();
+        }
+    });
+
     // Modal
     function openNoteModal(data) {
         document.getElementById('noteUrl').value = data.url;
@@ -264,17 +421,12 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('modalCarTitle').textContent = data.title;
         document.getElementById('noteText').value = ''; // Clear previous note
 
-        // Check if note exists
-        fetch('/api/notes')
-            .then(res => res.json())
-            .then(response => {
-                if (response.success) {
-                    const existing = response.notes.find(n => n.url === data.url);
-                    if (existing) {
-                        document.getElementById('noteText').value = existing.note;
-                    }
-                }
-            });
+        // Check if note exists in local storage
+        const leads = getLeads();
+        const existing = leads.find(l => l.url === data.url);
+        if (existing) {
+            document.getElementById('noteText').value = existing.notes;
+        }
 
         noteModal.style.display = 'block';
     }
@@ -284,58 +436,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target === noteModal) noteModal.style.display = 'none';
     });
 
-    // Save Note
-    noteForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-
-        const formData = {
-            url: document.getElementById('noteUrl').value,
-            title: document.getElementById('noteTitle').value,
-            price: document.getElementById('notePrice').value,
-            source: document.getElementById('noteSource').value,
-            image_url: document.getElementById('noteImage').value,
-            note: document.getElementById('noteText').value
-        };
-
-        try {
-            const response = await fetch('/api/notes', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                noteModal.style.display = 'none';
-                alert('Note saved successfully!');
-            } else {
-                alert('Error saving note: ' + (data.error || 'Unknown error'));
-            }
-        } catch (error) {
-            alert('Error saving note: ' + error.message);
-        }
-    });
-
-    // Load Notes
-    function loadNotes() {
-        fetch('/api/notes')
-            .then(res => res.json())
-            .then(response => {
-                if (response.success) {
-                    displayNotes(response.notes);
-                }
-            })
-            .catch(error => {
-                console.error('Error loading notes:', error);
-            });
-    }
-
-    // Display Notes
-    function displayNotes(notes) {
-        if (notes.length === 0) {
+    // Display Notes (Leads)
+    function displayNotes(leads) {
+        if (!leads || leads.length === 0) {
             noNotes.style.display = 'block';
             notesContainer.innerHTML = '';
             return;
@@ -344,37 +447,67 @@ document.addEventListener('DOMContentLoaded', function () {
         noNotes.style.display = 'none';
         notesContainer.innerHTML = '';
 
-        notes.forEach(note => {
+        const STATUS_COLORS = {
+            'Not Contacted': '#6c757d', // Grey
+            'Contacted': '#ffc107',     // Yellow/Orange
+            'Successful': '#28a745',    // Green
+            'Rejected': '#dc3545'       // Red
+        };
+
+        const STATUS_OPTIONS = ['Not Contacted', 'Contacted', 'Successful', 'Rejected'];
+
+        leads.forEach(lead => {
             const card = document.createElement('div');
             card.className = 'car-card';
 
-            const sourceClass = note.source.toLowerCase().replace(/\s+/g, '-');
-            const imageHtml = note.image_url
-                ? `<img src="${note.image_url}" alt="${note.title}">`
+            // Add captured class if status is Successful
+            if (lead.status === 'Successful') {
+                card.classList.add('lead-captured');
+            }
+
+            const sourceClass = (lead.source || 'unknown').toLowerCase().replace(/\s+/g, '-');
+            const imageHtml = lead.image_url
+                ? `<img src="${lead.image_url}" alt="${lead.title}">`
                 : '<div style="padding: 2rem; text-align: center; color: #999;">No Image</div>';
+
+            // Default to 'Not Contacted' if status is unknown or old
+            const currentStatus = STATUS_OPTIONS.includes(lead.status) ? lead.status : 'Not Contacted';
+            const statusColor = STATUS_COLORS[currentStatus] || '#6c757d';
 
             card.innerHTML = `
                 <div class="car-image">
                     ${imageHtml}
                 </div>
                 <div class="car-content">
-                    <h4 class="car-title">${note.title}</h4>
-                    <div class="car-price">${note.price}</div>
-                    <div class="note-content">${note.note}</div>
+                    <h4 class="car-title">
+                        <a href="${lead.url}" target="_blank" style="text-decoration: none; color: inherit; hover: text-decoration: underline;">${lead.title}</a>
+                    </h4>
+                    <div class="car-price">${lead.price}</div>
+                    <div class="note-content">${lead.notes || ''}</div>
                     <div class="car-footer">
-                        <span class="source-badge ${sourceClass}">${note.source}</span>
-                        <div class="note-actions">
-                            <button class="btn-delete" data-url="${note.url}">Delete</button>
-                            <a href="${note.url}" target="_blank" class="view-link">View Listing →</a>
+                        <span class="source-badge ${sourceClass}">${lead.source}</span>
+                        <div class="note-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn-delete" data-id="${lead.id}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Delete</button>
+                            <button class="btn-status" data-id="${lead.id}" style="background: ${statusColor}; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: bold; flex-grow: 1; cursor: pointer;">${currentStatus}</button>
                         </div>
                     </div>
                 </div>
             `;
 
+            // Status toggle handler (Cycle through statuses)
+            card.querySelector('.btn-status').addEventListener('click', function () {
+                const currentStatus = STATUS_OPTIONS.includes(lead.status) ? lead.status : 'Not Contacted';
+                const currentIndex = STATUS_OPTIONS.indexOf(currentStatus);
+                const nextIndex = (currentIndex + 1) % STATUS_OPTIONS.length;
+                const newStatus = STATUS_OPTIONS[nextIndex];
+
+                updateLeadStatus(lead.id, newStatus);
+            });
+
             // Delete handler
             card.querySelector('.btn-delete').addEventListener('click', function () {
-                if (confirm('Delete this note?')) {
-                    deleteNote(note.url);
+                if (confirm('Delete this lead?')) {
+                    deleteLead(lead.id);
                 }
             });
 
@@ -382,25 +515,45 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Delete Note
-    function deleteNote(url) {
-        fetch('/api/notes', {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ url: url })
-        })
-            .then(res => res.json())
-            .then(response => {
-                if (response.success) {
-                    loadNotes();
-                } else {
-                    alert('Error deleting note');
-                }
-            })
-            .catch(error => {
-                alert('Error deleting note: ' + error.message);
-            });
+    // Update Lead Status
+    function updateLeadStatus(id, status) {
+        const leads = getLeads();
+        const index = leads.findIndex(l => l.id == id);
+
+        if (index >= 0) {
+            leads[index].status = status;
+            leads[index].updated_at = new Date().toISOString();
+            saveLeads(leads);
+            loadNotes(); // Reload to update UI
+        }
+    }
+
+    // Helper function to update dropdown color
+    function updateDropdownColor(dropdown) {
+        const STATUS_COLORS = {
+            'Not Contacted': { bg: '#6c757d', text: 'white' },
+            'Pending': { bg: '#ffc107', text: 'black' },
+            'Captured': { bg: '#28a745', text: 'white' },
+            'Rejected': { bg: '#dc3545', text: 'white' }
+        };
+
+        const status = dropdown.value;
+        const colors = STATUS_COLORS[status] || STATUS_COLORS['Not Contacted'];
+        dropdown.style.backgroundColor = colors.bg;
+        dropdown.style.color = colors.text;
+    }
+
+    // Load Notes
+    function loadNotes() {
+        const leads = getLeads();
+        displayNotes(leads);
+    }
+
+    // Delete Lead
+    function deleteLead(id) {
+        let leads = getLeads();
+        leads = leads.filter(l => l.id != id);
+        saveLeads(leads);
+        loadNotes();
     }
 });

@@ -7,6 +7,7 @@ from scraper import (
     AutoTraderScraper,
     CarsComScraper,
     FacebookScraper,
+    OfferUpScraper,
     CarListing
 )
 import concurrent.futures
@@ -19,8 +20,9 @@ class SearchCoordinator:
     def __init__(self):
         self.scrapers = [
             CraigslistScraper(),
-            AutoTraderScraper(),
+            # AutoTraderScraper(),  # Disabled - not working
             CarsComScraper(),
+            OfferUpScraper(),
             # FacebookScraper(),  # Commented out by default due to complexity
         ]
     
@@ -28,6 +30,8 @@ class SearchCoordinator:
                    year_max: Optional[int] = None, price_min: Optional[int] = None,
                    price_max: Optional[int] = None, location: Optional[str] = None,
                    max_results: int = 20, enable_facebook: bool = False,
+                   enable_craigslist: bool = True, enable_cars_com: bool = True,
+                   enable_offerup: bool = True, enable_autotrader: bool = False,
                    private_sellers_only: bool = False) -> Dict[str, List[CarListing]]:
         """
         Search all websites in parallel
@@ -46,28 +50,47 @@ class SearchCoordinator:
         
         if not makes:
             return results
+            
+        # Initialize active scrapers based on flags
+        active_scrapers = []
+        
+        if enable_craigslist:
+            active_scrapers.append(CraigslistScraper())
+            
+        if enable_cars_com:
+            active_scrapers.append(CarsComScraper())
+            
+        if enable_offerup:
+            active_scrapers.append(OfferUpScraper())
+            
+        if enable_autotrader:
+            active_scrapers.append(AutoTraderScraper())
         
         # Enable Facebook if requested
         if enable_facebook:
-            if not any(isinstance(s, FacebookScraper) for s in self.scrapers):
-                self.scrapers.append(FacebookScraper())
+            active_scrapers.append(FacebookScraper())
+            
+        # If no scrapers selected, return empty
+        if not active_scrapers:
+            print("[WARNING] No scrapers selected")
+            return results
         
         # Search all sites in parallel
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.scrapers)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(active_scrapers)) as executor:
             future_to_scraper = {
                 executor.submit(
                     scraper.search,
                     makes, model, year_min, year_max,
                     price_min, price_max, location, max_results,
                     private_sellers_only
-                ): scraper for scraper in self.scrapers
+                ): scraper for scraper in active_scrapers
             }
             
             for future in concurrent.futures.as_completed(future_to_scraper):
                 scraper = future_to_scraper[future]
                 try:
                     # Set a timeout for each scraper to prevent hanging
-                    listings = future.result(timeout=15)
+                    listings = future.result(timeout=12)
                     results[scraper.source_name] = listings
                     print(f"[OK] Found {len(listings)} listings on {scraper.source_name}")
                 except Exception as e:

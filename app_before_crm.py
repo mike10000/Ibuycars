@@ -43,8 +43,19 @@ def close_connection(exception):
 def init_db():
     with app.app_context():
         db = get_db()
-        # Initialize DB tables if needed
-        pass
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                title TEXT,
+                price TEXT,
+                source TEXT,
+                image_url TEXT,
+                note TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        db.commit()
 
 # Initialize DB on start
 init_db()
@@ -65,6 +76,7 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
+@require_auth
 def index():
     """Serve the main page"""
     return render_template('index.html')
@@ -91,10 +103,6 @@ def search():
         location = data.get('location', '').strip() if data.get('location') else None
         max_results = data.get('max_results', 20)
         enable_facebook = data.get('enable_facebook', False)
-        enable_craigslist = data.get('enable_craigslist', True)
-        enable_cars_com = data.get('enable_cars_com', True)
-        enable_offerup = data.get('enable_offerup', True)
-        enable_autotrader = data.get('enable_autotrader', False)
         private_sellers_only = data.get('private_sellers_only', False)
         
         # Parse makes - can be comma-separated string or list
@@ -139,10 +147,6 @@ def search():
             location=location,
             max_results=max_results,
             enable_facebook=enable_facebook,
-            enable_craigslist=enable_craigslist,
-            enable_cars_com=enable_cars_com,
-            enable_offerup=enable_offerup,
-            enable_autotrader=enable_autotrader,
             private_sellers_only=private_sellers_only
         )
         
@@ -191,7 +195,65 @@ def search():
         }), 500
 
 
+@app.route('/api/notes', methods=['GET'])
+def get_notes():
+    """Get all saved notes"""
+    try:
+        db = get_db()
+        cur = db.execute('SELECT * FROM notes ORDER BY created_at DESC')
+        notes = [dict(row) for row in cur.fetchall()]
+        return jsonify({'success': True, 'notes': notes})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/notes', methods=['POST'])
+def save_note():
+    """Save or update a note"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        note_text = data.get('note')
+        
+        if not url or not note_text:
+            return jsonify({'success': False, 'error': 'URL and note text are required'}), 400
+            
+        db = get_db()
+        
+        # Check if note exists for this URL
+        cur = db.execute('SELECT id FROM notes WHERE url = ?', (url,))
+        existing = cur.fetchone()
+        
+        if existing:
+            db.execute('UPDATE notes SET note = ?, created_at = CURRENT_TIMESTAMP WHERE url = ?',
+                      (note_text, url))
+        else:
+            db.execute('''
+                INSERT INTO notes (url, title, price, source, image_url, note)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                url,
+                data.get('title', 'Unknown Car'),
+                data.get('price', 'N/A'),
+                data.get('source', 'Unknown'),
+                data.get('image_url', ''),
+                note_text
+            ))
+            
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/notes/<int:note_id>', methods=['DELETE'])
+def delete_note(note_id):
+    """Delete a note"""
+    try:
+        db = get_db()
+        db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

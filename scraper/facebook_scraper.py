@@ -79,29 +79,50 @@ class FacebookScraper(BaseScraper):
                     query += f" {year_min}"
                 
                 
-                # Navigate to marketplace with location
-                # Facebook Marketplace URL structure: /marketplace/LOCATION/search
-                # Category 807311116002614 is for vehicles
-                search_url = f"{self.base_url}/category/vehicles"
+                # Navigate to marketplace with search parameters
+                # Facebook Marketplace location filtering is unreliable via URL parameters
+                # We will try the path-based approach: /marketplace/{slug}/search
                 
-                # Add location if provided
+                # Extract city and state for slug
+                slug = "us" # Default to US if no location
+                
                 if location:
-                    # Try to extract city/state or use as-is
-                    location_clean = location.replace(',', '').replace(' ', '-').lower()
-                    search_url = f"{self.base_url}/{location_clean}/search"
-                else:
-                    search_url = f"{self.base_url}/search"
+                    # Try to extract city and state
+                    # Remove ZIP code first
+                    loc_clean = re.sub(r'\d{5}', '', location).strip()
+                    
+                    # Clean up for slug: lowercase, replace spaces/commas with hyphens
+                    # "Denver, CO" -> "denver" (try city only first as it's often more reliable)
+                    # If we have a comma, take the first part
+                    if ',' in loc_clean:
+                        slug = loc_clean.split(',')[0].strip().lower()
+                    else:
+                        slug = loc_clean.lower()
+                    
+                    slug = re.sub(r'\s+', '-', slug)
                 
-                # Add query parameter
+                # Build the search URL using path-based structure
+                # Format: /marketplace/{slug}/search?query=...
+                search_url = f"{self.base_url}/{slug}/search"
+                
+                # Add query parameter for search term
                 search_url += f"?query={query.replace(' ', '%20')}"
                 
-                # Add category for vehicles
+                # Add category filter for vehicles
                 search_url += "&category=vehicles"
+                
+                # Add delivery method filter (local pickup)
+                search_url += "&deliveryMethod=local_pick_up"
+                
+                # Add radius
+                search_url += "&radius=40"
                 
                 if price_min:
                     search_url += f"&minPrice={price_min}"
                 if price_max:
                     search_url += f"&maxPrice={price_max}"
+                
+                print(f"[Facebook] Searching URL: {search_url}")
                 
                 self.driver.get(search_url)
                 time.sleep(3)  # Wait for page to load
@@ -142,15 +163,44 @@ class FacebookScraper(BaseScraper):
                         except:
                             pass
                         
-                        # Extract location
-                        location_text = location or "N/A"
+                        # Extract location from the listing itself
+                        location_text = "N/A"
                         try:
-                            loc_elem = elem.find_element(By.CSS_SELECTOR, 
-                                'span[class*="location"]')
-                            if loc_elem:
-                                location_text = self.clean_text(loc_elem.text)
+                            # Try multiple selectors for location
+                            # Facebook shows location in different ways
+                            location_selectors = [
+                                'span[class*="location"]',
+                                'span:contains("miles away")',
+                                'div[class*="location"] span',
+                                'span[dir="auto"]'  # Sometimes location is in a span with dir="auto"
+                            ]
+                            
+                            for selector in location_selectors:
+                                try:
+                                    loc_elems = elem.find_elements(By.CSS_SELECTOR, selector)
+                                    for loc_elem in loc_elems:
+                                        text = self.clean_text(loc_elem.text)
+                                        # Check if this looks like a location (contains city/state or "miles away")
+                                        if text and (
+                                            'miles away' in text.lower() or 
+                                            ',' in text or  # City, State format
+                                            len(text.split()) <= 4  # Short location text
+                                        ):
+                                            # Skip if it's a price or title
+                                            if '$' not in text and not re.search(r'\b(19|20)\d{2}\b', text):
+                                                location_text = text
+                                                break
+                                    if location_text != "N/A":
+                                        break
+                                except:
+                                    continue
+                            
+                            # If still no location found, use the search location
+                            if location_text == "N/A" and location:
+                                location_text = location
                         except:
-                            pass
+                            if location:
+                                location_text = location
                         
                         
                         # Extract year from title
@@ -188,6 +238,55 @@ class FacebookScraper(BaseScraper):
             except Exception as e:
                 print(f"Error scraping Facebook Marketplace for {make}: {e}")
                 continue
+        
+        # Filter results by location if specified
+        # Facebook's URL parameters don't always work, so we filter after fetching
+        if location and all_listings:
+            filtered_listings = []
+            target_state = None
+            target_city = None
+            
+            # Extract target location info
+            # Try to extract city and state from location string
+            city_name = None
+            state_code = None
+            
+            city_state_match = re.search(r'([A-Za-z\s]+),?\s+([A-Z]{2})', location)
+            if city_state_match:
+                city_name = city_state_match.group(1).strip().lower()
+                state_code = city_state_match.group(2).upper()
+            
+            if state_code:
+                target_state = state_code.upper()
+            if city_name:
+                target_city = city_name.lower()
+            
+            print(f"[Facebook] Filtering {len(all_listings)} results for location: {location}")
+            
+            for listing in all_listings:
+                # Check if listing location matches target
+                listing_loc = listing.location.lower()
+                
+                # Only filter out obvious wrong states (mainly California when not searching there)
+                # Be less aggressive to allow more results through
+                if target_state and target_state.upper() not in ['CA', 'CALIFORNIA']:
+                    # If we're NOT searching in California, exclude CA results
+                    if 'california' in listing_loc or ', ca' in listing_loc:
+                        print(f"[Facebook] Dropping result from California: {listing.title} ({listing.location})")
+                        continue
+                
+                # Otherwise, keep the listing
+                # print(f"[Facebook] Keeping result: {listing.title} ({listing.location})")
+                filtered_listings.append(listing)
+            
+            print(f"[Facebook] Filtered to {len(filtered_listings)} results matching location")
+            all_listings = filtered_listings
+        
+        if all_listings:
+            print(f"[Facebook] Found {len(all_listings)} results")
+            # Print first few locations for debugging
+            for i, listing in enumerate(all_listings[:3]):
+                print(f"[Facebook] Result {i+1} location: {listing.location}")
         
         if self.driver:
             self.driver.quit()
