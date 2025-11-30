@@ -1,31 +1,29 @@
 """
-Flask backend API for the car search tool
+Flask backend API for the car search tool with Google OAuth
 """
 from flask import Flask, render_template, request, jsonify, g, session, redirect, url_for
 from flask_cors import CORS
+from flask_login import login_required, current_user, logout_user
 from search_coordinator import SearchCoordinator
 import traceback
 import sqlite3
 import os
 from datetime import datetime
 from functools import wraps
+from config import config
+import auth
 
 DATABASE = 'notes.db'
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
+app.secret_key = config.SECRET_KEY
+app.config.from_object(config)
 CORS(app)  # Enable CORS for frontend
 
-# Password protection - password is "car"
-APP_PASSWORD = os.environ.get('APP_PASSWORD', 'car')
+# Initialize OAuth
+auth.init_oauth(app)
 
-def require_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get('authenticated'):
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated
+# Note: @login_required decorator is now imported from flask_login
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -49,19 +47,79 @@ def init_db():
 # Initialize DB on start
 init_db()
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login')
 def login():
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if password == APP_PASSWORD:
-            session['authenticated'] = True
-            return redirect(url_for('index'))
-        return render_template('login.html', error='Invalid password')
-    return render_template('login.html')
+    """Initiate Google OAuth login"""
+    # Create flow instance to manage the OAuth 2.0 Authorization Grant Flow
+    flow = auth.create_oauth_flow(redirect_uri=url_for('oauth2callback', _external=True))
+    
+    # Generate authorization URL
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true'
+    )
+    
+    # Store state in session for verification
+    session['state'] = state
+    
+    return redirect(authorization_url)
+
+ 
+@app.route('/oauth2callback')
+def oauth2callback():
+    """Handle OAuth2 callback from Google"""
+    # Verify state
+    if request.args.get('state') != session.get('state'):
+        return 'State mismatch error', 400
+    
+    # Exchange authorization code for access token
+    flow = auth.create_oauth_flow(redirect_uri=url_for('oauth2callback', _external=True))
+    flow.fetch_token(authorization_response=request.url)
+    
+    # Get credentials
+    credentials = flow.credentials
+    
+    # Get user info from Google
+    import requests
+    userinfo_endpoint = auth.get_google_provider_cfg()["userinfo_endpoint"]
+    userinfo_response = requests.get(
+        userinfo_endpoint,
+        headers={"Authorization": f"Bearer {credentials.token}"}
+    )
+    
+    if userinfo_response.status_code != 200:
+        return "Failed to get user info from Google", 400
+    
+    userinfo = userinfo_response.json()
+    
+    # Validate email domain
+    email = userinfo.get("email")
+    if not auth.validate_domain(email):
+        return render_template('unauthorized.html', email=email, allowed_domains=config.ALLOWED_DOMAINS)
+    
+    # Create user and login
+    user = auth.create_user_from_google_info(userinfo)
+    
+    # Store user in session
+    session['user'] = {
+        'id': user.id,
+        'name': user.name,
+        'email': user.email,
+        'picture': user.picture
+    }
+    
+    from flask_login import login_user
+    login_user(user)
+    
+    return redirect(url_for('index'))
+
 
 @app.route('/logout')
+@login_required
 def logout():
-    session.pop('authenticated', None)
+    """Logout user"""
+    logout_user()
+    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/')
@@ -194,5 +252,7 @@ def search():
 
 
 if __name__ == '__main__':
+    # Allow OAuth over HTTP for local testing
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(debug=True, host='0.0.0.0', port=5000)
 

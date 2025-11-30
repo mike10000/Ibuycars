@@ -389,6 +389,7 @@ document.addEventListener('DOMContentLoaded', function () {
             price: document.getElementById('notePrice').value,
             source: document.getElementById('noteSource').value,
             image_url: document.getElementById('noteImage').value,
+            phone: document.getElementById('notePhone').value,
             notes: document.getElementById('noteText').value,
             status: existingIndex >= 0 ? leads[existingIndex].status : 'New',
             created_at: existingIndex >= 0 ? leads[existingIndex].created_at : new Date().toISOString(),
@@ -420,12 +421,14 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('noteImage').value = data.image_url;
         document.getElementById('modalCarTitle').textContent = data.title;
         document.getElementById('noteText').value = ''; // Clear previous note
+        document.getElementById('notePhone').value = ''; // Clear previous phone
 
         // Check if note exists in local storage
         const leads = getLeads();
         const existing = leads.find(l => l.url === data.url);
         if (existing) {
             document.getElementById('noteText').value = existing.notes;
+            document.getElementById('notePhone').value = existing.phone || '';
         }
 
         noteModal.style.display = 'block';
@@ -483,6 +486,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         <a href="${lead.url}" target="_blank" style="text-decoration: none; color: inherit; hover: text-decoration: underline;">${lead.title}</a>
                     </h4>
                     <div class="car-price">${lead.price}</div>
+                    ${lead.phone ? `
+                    <div class="contact-info" style="margin: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-weight: 500;">📞 ${lead.phone}</span>
+                        <button class="btn-copy" data-phone="${lead.phone}" style="background: none; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.8rem;" title="Copy to clipboard">📋 Copy</button>
+                    </div>
+                    ` : ''}
                     <div class="note-content">${lead.notes || ''}</div>
                     <div class="car-footer">
                         <span class="source-badge ${sourceClass}">${lead.source}</span>
@@ -510,6 +519,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     deleteLead(lead.id);
                 }
             });
+
+            // Copy phone handler
+            const copyBtn = card.querySelector('.btn-copy');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function () {
+                    const phone = this.dataset.phone;
+                    navigator.clipboard.writeText(phone).then(() => {
+                        const originalText = this.innerHTML;
+                        this.innerHTML = '✅ Copied!';
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy text: ', err);
+                        alert('Failed to copy phone number');
+                    });
+                });
+            }
 
             notesContainer.appendChild(card);
         });

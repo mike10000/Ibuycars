@@ -50,3 +50,6 @@ Thumbs.db
 instance/
 .webassets-cache
 *.db
+
+# Environment variables (OAuth credentials)
+.env
