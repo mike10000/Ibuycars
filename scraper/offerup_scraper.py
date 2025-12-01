@@ -18,10 +18,12 @@ import time
 class OfferUpScraper(BaseScraper):
     """Scraper for OfferUp car listings"""
     
-    def __init__(self, use_selenium: bool = True):
+    def __init__(self, use_selenium: bool = True, headless: bool = True, debug: bool = False):
         super().__init__("OfferUp")
         self.base_url = "https://offerup.com/explore/k/cars-trucks"
         self.use_selenium = use_selenium
+        self.headless = headless
+        self.debug = debug
         self.driver = None
     
     def _zip_to_lat_lon(self, zip_code: str) -> tuple:
@@ -63,13 +65,15 @@ class OfferUpScraper(BaseScraper):
             return
         
         chrome_options = Options()
-        chrome_options.add_argument('--headless')
+        if self.headless:
+            chrome_options.add_argument('--headless')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         chrome_options.add_argument(f'user-agent={self.ua.random}')
+        chrome_options.add_argument('--window-size=1920,1080')
         
         try:
             driver_path = ChromeDriverManager().install()
@@ -142,6 +146,8 @@ class OfferUpScraper(BaseScraper):
             full_url = f"{url}?{urlencode(params)}"
             
             self.driver.get(full_url)
+            if self.debug:
+                print(f"  OfferUp: Navigating to {full_url}")
             time.sleep(3)  # Wait for page to load
             
             # Wait for listings to appear
@@ -159,6 +165,10 @@ class OfferUpScraper(BaseScraper):
             # Get page source and parse
             page_source = self.driver.page_source
             soup = BeautifulSoup(page_source, 'lxml')
+            
+            if self.debug:
+                print(f"  OfferUp: Page title: {self.driver.title}")
+                print(f"  OfferUp: Page source length: {len(page_source)} chars")
             
             # Find all car listing links
             # OfferUp uses anchor tags with specific patterns

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iBuyCars - Find Your Perfect Used Car</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -64,19 +64,19 @@
                             <input type="text" id="model" name="model" placeholder="e.g., Camry, Civic, F-150">
                             <small class="form-hint">Leave blank to search all models</small>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-small">
                             <label for="year_min">Min Year</label>
                             <input type="number" id="year_min" name="year_min" placeholder="2010" min="1900" max="2025">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-small">
                             <label for="year_max">Max Year</label>
                             <input type="number" id="year_max" name="year_max" placeholder="2024" min="1900" max="2025">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-small">
                             <label for="price_min">Min Price ($)</label>
                             <input type="number" id="price_min" name="price_min" placeholder="5000" min="0">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-small">
                             <label for="price_max">Max Price ($)</label>
                             <input type="number" id="price_max" name="price_max" placeholder="30000" min="0">
                         </div>
@@ -85,7 +85,7 @@
                             <input type="text" id="location" name="location" placeholder="e.g., Miami, FL or 33922"
                                 required>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-small">
                             <label for="max_results">Results per Site</label>
                             <input type="number" id="max_results" name="max_results" value="20" min="1" max="100">
                         </div>
@@ -100,8 +100,8 @@
                             <span>Cars.com</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" id="enable_offerup" name="enable_offerup" checked>
-                            <span>OfferUp</span>
+                            <input type="checkbox" id="enable_offerup" name="enable_offerup">
+                            <span>OfferUp (Unreliable)</span>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" id="enable_autotrader" name="enable_autotrader">
