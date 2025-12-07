@@ -2,6 +2,9 @@
 let allListingsGlobal = []; // Store all listings for filtering
 let currentFilter = null; // Track current filter
 
+// Local Storage Key
+const STORAGE_KEY = 'ibuycars_leads';
+
 document.addEventListener('DOMContentLoaded', function () {
     const searchForm = document.getElementById('searchForm');
     const resultsSection = document.getElementById('results');
@@ -47,7 +50,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // Handle program selection
         vehicleProgramSelect.addEventListener('change', function () {
             const program = this.value;
-            if (program && PROGRAM_MAKES[program]) {
+            if (program === 'all_vehicles') {
+                makeInput.value = 'All Vehicles';
+            } else if (program && PROGRAM_MAKES[program]) {
                 makeInput.value = PROGRAM_MAKES[program].join(', ');
             } else {
                 // If "Custom" is selected, we could clear it, or leave it. 
@@ -269,14 +274,17 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         `;
 
-        // Set initial status from localStorage
-        const leads = getLeads();
-        const existingLead = leads.find(l => l.url === listing.url);
+        // Set initial status from API
         const dropdown = card.querySelector('.lead-status-dropdown');
 
-        if (existingLead && existingLead.status) {
-            dropdown.value = existingLead.status;
-        }
+        // Load status asynchronously
+        getLeads().then(leads => {
+            const existingLead = leads.find(l => l.url === listing.url);
+            if (existingLead && existingLead.status) {
+                dropdown.value = existingLead.status;
+                updateDropdownColor(dropdown);
+            }
+        });
 
         // Update dropdown background color based on selection
         updateDropdownColor(dropdown);
@@ -302,35 +310,22 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Handle status change
-        dropdown.addEventListener('change', function (e) {
+        dropdown.addEventListener('change', async function (e) {
             e.stopPropagation();
             const newStatus = this.value;
             updateDropdownColor(this);
 
             // Save or update lead with new status
-            const leads = getLeads();
-            const existingIndex = leads.findIndex(l => l.url === listing.url);
-
             const leadData = {
-                id: existingIndex >= 0 ? leads[existingIndex].id : Date.now(),
                 url: listing.url,
                 title: listing.title,
                 price: listing.price,
                 source: listing.source,
                 image_url: listing.image_url || '',
-                notes: existingIndex >= 0 ? leads[existingIndex].notes : '',
-                status: newStatus,
-                created_at: existingIndex >= 0 ? leads[existingIndex].created_at : new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                status: newStatus
             };
 
-            if (existingIndex >= 0) {
-                leads[existingIndex] = leadData;
-            } else {
-                leads.unshift(leadData);
-            }
-
-            saveLeads(leads);
+            await saveLead(leadData);
         });
 
         return card;
@@ -358,62 +353,68 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Local Storage Key
-    const STORAGE_KEY = 'ibuycars_leads';
 
-    // Helper to get leads
-    function getLeads() {
-        const leads = localStorage.getItem(STORAGE_KEY);
-        return leads ? JSON.parse(leads) : [];
+    // Helper to get leads from API
+    async function getLeads() {
+        try {
+            const response = await fetch('/api/leads');
+            if (response.ok) {
+                const data = await response.json();
+                return data.success ? data.leads : [];
+            }
+        } catch (error) {
+            console.error('Error fetching leads:', error);
+        }
+        return [];
     }
 
-    // Helper to save leads
-    function saveLeads(leads) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+    // Helper to save lead to API
+    async function saveLead(leadData) {
+        try {
+            const response = await fetch('/api/leads', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(leadData)
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('Error saving lead:', error);
+            return false;
+        }
     }
 
     // Save Note (Lead)
-    noteForm.addEventListener('submit', function (e) {
+    document.getElementById('saveNoteBtn').addEventListener('click', async function (e) {
         e.preventDefault();
 
-        const leads = getLeads();
-        const url = document.getElementById('noteUrl').value;
-
-        // Check if already exists
-        const existingIndex = leads.findIndex(l => l.url === url);
-
         const leadData = {
-            id: existingIndex >= 0 ? leads[existingIndex].id : Date.now(),
-            url: url,
+            url: document.getElementById('noteUrl').value,
             title: document.getElementById('noteTitle').value,
             price: document.getElementById('notePrice').value,
             source: document.getElementById('noteSource').value,
             image_url: document.getElementById('noteImage').value,
-            phone: document.getElementById('notePhone').value,
+            seller_phone: document.getElementById('notePhone').value,
             notes: document.getElementById('noteText').value,
-            status: existingIndex >= 0 ? leads[existingIndex].status : 'New',
-            created_at: existingIndex >= 0 ? leads[existingIndex].created_at : new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            status: 'new'
         };
 
-        if (existingIndex >= 0) {
-            leads[existingIndex] = leadData;
+        const success = await saveLead(leadData);
+
+        if (success) {
+            noteModal.style.display = 'none';
+
+            if (notesSection.style.display === 'block') {
+                loadNotes();
+            }
         } else {
-            leads.unshift(leadData);
-        }
-
-        saveLeads(leads);
-
-        noteModal.style.display = 'none';
-        alert('Lead saved successfully!');
-
-        if (notesSection.style.display === 'block') {
-            loadNotes();
+            alert('Error saving lead. Please try again.');
         }
     });
 
     // Modal
-    function openNoteModal(data) {
+    async function openNoteModal(data) {
         document.getElementById('noteUrl').value = data.url;
         document.getElementById('noteTitle').value = data.title;
         document.getElementById('notePrice').value = data.price;
@@ -423,20 +424,37 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('noteText').value = ''; // Clear previous note
         document.getElementById('notePhone').value = ''; // Clear previous phone
 
-        // Check if note exists in local storage
-        const leads = getLeads();
+        // Check if note exists in API
+        const leads = await getLeads();
         const existing = leads.find(l => l.url === data.url);
         if (existing) {
-            document.getElementById('noteText').value = existing.notes;
-            document.getElementById('notePhone').value = existing.phone || '';
+            document.getElementById('noteText').value = existing.notes || '';
+            document.getElementById('notePhone').value = existing.seller_phone || '';
         }
 
         noteModal.style.display = 'block';
     }
 
-    closeModal.addEventListener('click', () => noteModal.style.display = 'none');
+    // Close modal handlers
+    if (closeModal) {
+        closeModal.addEventListener('click', (e) => {
+            e.stopPropagation();
+            noteModal.style.display = 'none';
+        });
+    }
+
+    // Click outside modal to close
     window.addEventListener('click', (e) => {
-        if (e.target === noteModal) noteModal.style.display = 'none';
+        if (e.target === noteModal) {
+            noteModal.style.display = 'none';
+        }
+    });
+
+    // Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && noteModal.style.display === 'block') {
+            noteModal.style.display = 'none';
+        }
     });
 
     // Display Notes (Leads)
@@ -543,15 +561,24 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Update Lead Status
-    function updateLeadStatus(id, status) {
-        const leads = getLeads();
-        const index = leads.findIndex(l => l.id == id);
+    async function updateLeadStatus(leadId, status) {
+        try {
+            const response = await fetch(`/api/leads/${leadId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status })
+            });
 
-        if (index >= 0) {
-            leads[index].status = status;
-            leads[index].updated_at = new Date().toISOString();
-            saveLeads(leads);
-            loadNotes(); // Reload to update UI
+            if (response.ok) {
+                loadNotes(); // Reload to update UI
+            } else {
+                alert('Error updating status');
+            }
+        } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error updating status');
         }
     }
 
@@ -571,16 +598,26 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Load Notes
-    function loadNotes() {
-        const leads = getLeads();
+    async function loadNotes() {
+        const leads = await getLeads();
         displayNotes(leads);
     }
 
     // Delete Lead
-    function deleteLead(id) {
-        let leads = getLeads();
-        leads = leads.filter(l => l.id != id);
-        saveLeads(leads);
-        loadNotes();
+    async function deleteLead(leadId) {
+        try {
+            const response = await fetch(`/api/leads/${leadId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                loadNotes();
+            } else {
+                alert('Error deleting lead');
+            }
+        } catch (error) {
+            console.error('Error deleting lead:', error);
+            alert('Error deleting lead');
+        }
     }
 });

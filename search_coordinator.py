@@ -48,6 +48,10 @@ class SearchCoordinator:
         if isinstance(makes, str):
             makes = [m.strip() for m in makes.split(',') if m.strip()]
         
+        # Check for "All Vehicles" or "all"
+        if any(m.lower() in ['all vehicles', 'all'] for m in makes):
+            makes = ['']  # Empty string indicates generic search
+        
         if not makes:
             return results
             
@@ -90,7 +94,7 @@ class SearchCoordinator:
                 scraper = future_to_scraper[future]
                 try:
                     # Set a timeout for each scraper to prevent hanging
-                    listings = future.result(timeout=12)
+                    listings = future.result(timeout=60)
                     results[scraper.source_name] = listings
                     print(f"[OK] Found {len(listings)} listings on {scraper.source_name}")
                 except Exception as e:

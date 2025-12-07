@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Assignments - iBuyCars</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .assignment-card {
+            background: var(--bg-white);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .assignment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .assignment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .assignment-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .assignment-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .assignment-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .status-select {
+            padding: 0.5rem;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .status-select.pending {
+            border-color: #ff9800;
+        }
+
+        .status-select.contacted {
+            border-color: #2196F3;
+        }
+
+        .status-select.offer_made {
+            border-color: #9C27B0;
+        }
+
+        .status-select.purchased {
+            border-color: #4CAF50;
+        }
+
+        .status-select.passed {
+            border-color: #757575;
+        }
+
+        .status-select.declined {
+            border-color: #f44336;
+        }
+
+        .notes-section {
+            margin-top: 1rem;
+        }
+
+        .notes-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn-update {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-update:hover {
+            transform: translateY(-2px);
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-white);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .filter-tab.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .filter-tab:hover:not(.active) {
+            border-color: var(--primary-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            background: var(--bg-white);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        .empty-state p {
+            font-size: 1.1rem;
+            color: var(--text-light);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="iBuyCars Logo">
+                </div>
+                <nav class="nav">
+                    <a href="/" class="nav-link">Search</a>
+                    <a href="/my-assignments" class="nav-link active">My Assignments</a>
+                    <a href="/logout" class="nav-link">Logout</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <section class="search-section">
+        <div class="container">
+            <h2 class="results-title">My Assignments</h2>
+
+            <!-- Filter Tabs -->
+            <div class="filter-tabs">
+                <div class="filter-tab active" data-status="all" onclick="filterAssignments('all')">
+                    All (<span id="count-all">0</span>)
+                </div>
+                <div class="filter-tab" data-status="pending" onclick="filterAssignments('pending')">
+                    Pending (<span id="count-pending">0</span>)
+                </div>
+                <div class="filter-tab" data-status="contacted" onclick="filterAssignments('contacted')">
+                    Contacted (<span id="count-contacted">0</span>)
+                </div>
+                <div class="filter-tab" data-status="offer_made" onclick="filterAssignments('offer_made')">
+                    Offer Made (<span id="count-offer_made">0</span>)
+                </div>
+                <div class="filter-tab" data-status="purchased" onclick="filterAssignments('purchased')">
+                    Purchased (<span id="count-purchased">0</span>)
+                </div>
+                <div class="filter-tab" data-status="passed" onclick="filterAssignments('passed')">
+                    Passed (<span id="count-passed">0</span>)
+                </div>
+            </div>
+
+            <!-- Assignments List -->
+            <div id="assignmentsContainer">
+                <div class="empty-state">
+                    <p>Loading your assignments...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 iBuyCars. Search across multiple car listing websites.</p>
+        </div>
+    </footer>
+
+    <script>
+        let allAssignments = [];
+        let currentFilter = 'all';
+
+        document.addEventListener('DOMContentLoaded', function () {
+            loadAssignments();
+        });
+
+        async function loadAssignments() {
+            try {
+                const response = await fetch('/api/assignments');
+                allAssignments = await response.json();
+
+                // Update counts
+                document.getElementById('count-all').textContent = allAssignments.length;
+                ['pending', 'contacted', 'offer_made', 'purchased', 'passed', 'declined'].forEach(status => {
+                    const count = allAssignments.filter(a => a.status === status).length;
+                    const countEl = document.getElementById(`count-${status}`);
+                    if (countEl) countEl.textContent = count;
+                });
+
+                displayAssignments(allAssignments);
+            } catch (error) {
+                console.error('Error loading assignments:', error);
+                document.getElementById('assignmentsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <p style="color: red;">Error loading assignments</p>
+                    </div>
+                `;
+            }
+        }
+
+        function filterAssignments(status) {
+            currentFilter = status;
+
+            // Update active tab
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.closest('.filter-tab').classList.add('active');
+
+            // Filter and display
+            const filtered = status === 'all' ?
+                allAssignments :
+                allAssignments.filter(a => a.status === status);
+
+            displayAssignments(filtered);
+        }
+
+        function displayAssignments(assignments) {
+            const container = document.getElementById('assignmentsContainer');
+
+            if (assignments.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>No assignments found${currentFilter !== 'all' ? ' with this status' : ''}.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = assignments.map(assignment => `
+                <div class="assignment-card">
+                    <div class="assignment-header">
+                        <div>
+                            <div class="assignment-title">${assignment.listing_data.title}</div>
+                            <div class="assignment-price">${assignment.listing_data.price}</div>
+                        </div>
+                        <a href="${assignment.listing_url}" target="_blank" class="view-link">
+                            View Listing
+                        </a>
+                    </div>
+
+                    <div class="assignment-info">
+                        <div class="info-item">
+                            <span class="info-label">Source</span>
+                            <span class="info-value">${assignment.listing_data.source}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Location</span>
+                            <span class="info-value">${assignment.listing_data.location || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Assigned By</span>
+                            <span class="info-value">${assignment.assigned_by_name}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Assigned Date</span>
+                            <span class="info-value">${new Date(assignment.assigned_at).toLocaleDateString()}</span>
+                        </div>
+                        ${assignment.search_name ? `
+                        <div class="info-item">
+                            <span class="info-label">From Search</span>
+                            <span class="info-value">${assignment.search_name}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="assignment-info">
+                        <div class="info-item">
+                            <span class="info-label">Status</span>
+                            <select class="status-select ${assignment.status}" id="status-${assignment.id}" onchange="updateStatus(${assignment.id})">
+                                <option value="pending" ${assignment.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="contacted" ${assignment.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+                                <option value="offer_made" ${assignment.status === 'offer_made' ? 'selected' : ''}>Offer Made</option>
+                                <option value="purchased" ${assignment.status === 'purchased' ? 'selected' : ''}>Purchased</option>
+                                <option value="passed" ${assignment.status === 'passed' ? 'selected' : ''}>Passed</option>
+                                <option value="declined" ${assignment.status === 'declined' ? 'selected' : ''}>Declined</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="notes-section">
+                        <label class="info-label" for="notes-${assignment.id}">Notes</label>
+                        <textarea class="notes-textarea" id="notes-${assignment.id}" placeholder="Add your notes here...">${assignment.notes || ''}</textarea>
+                        <button class="btn-update" onclick="updateNotes(${assignment.id})">Update Notes</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function updateStatus(assignmentId) {
+            const status = document.getElementById(`status-${assignmentId}`).value;
+
+            try {
+                const response = await fetch(`/api/assignments/${assignmentId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status })
+                });
+
+                if (response.ok) {
+                    // Update the select styling
+                    document.getElementById(`status-${assignmentId}`).className = `status-select ${status}`;
+                    // Reload to update counts
+                    loadAssignments();
+                } else {
+                    alert('Failed to update status');
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Error updating status');
+            }
+        }
+
+        async function updateNotes(assignmentId) {
+            const notes = document.getElementById(`notes-${assignmentId}`).value;
+            const status = document.getElementById(`status-${assignmentId}`).value;
+
+            try {
+                const response = await fetch(`/api/assignments/${assignmentId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status, notes })
+                });
+
+                if (response.ok) {
+                    alert('Notes updated successfully!');
+                } else {
+                    alert('Failed to update notes');
+                }
+            } catch (error) {
+                console.error('Error updating notes:', error);
+                alert('Error updating notes');
+            }
+        }
+    </script>
+</body>
+
+</html>

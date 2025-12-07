@@ -25,6 +25,23 @@ class OfferUpScraper(BaseScraper):
         self.headless = headless
         self.debug = debug
         self.driver = None
+        
+        # Los Angeles DMA (DMA-CA-3) ZIP codes representing the counties
+        self.LA_DMA_ZIPS = [
+            "90001",  # Los Angeles
+            "92868",  # Orange County
+            "92346",  # San Bernardino
+            "93003",  # Ventura
+            "93526",  # Inyo (Bishop area)
+        ]
+        
+        # Denver DMA (DMA-CO-1)
+        # Using central Denver ZIP 80219 as requested, plus Springs/Fort Collins for coverage
+        self.DMA_CO_1_ZIPS = [
+            "80219",  # Denver (Central)
+            "80903",  # Colorado Springs
+            "80521",  # Fort Collins
+        ]
     
     def _zip_to_lat_lon(self, zip_code: str) -> tuple:
         """
@@ -90,6 +107,73 @@ class OfferUpScraper(BaseScraper):
         """Search OfferUp for cars"""
         all_listings = []
         
+        # Handle Los Angeles DMA multi-location search
+        if location and location.lower() in ['dma-ca-3', 'los angeles dma']:
+            print(f"[OfferUp] 'Los Angeles DMA' location detected. Searching across {len(self.LA_DMA_ZIPS)} areas...")
+            
+            # Reduce max_results per ZIP
+            per_zip_results = max(3, max_results // len(self.LA_DMA_ZIPS))
+            
+            for zip_code in self.LA_DMA_ZIPS:
+                print(f"[OfferUp] Searching ZIP: {zip_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    zip_code, per_zip_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle DMA-CO-1 (Denver)
+        if location and location.strip().lower() in ['dma-co-1', 'denver dma']:
+            print(f"[OfferUp] 'DMA-CO-1' location detected. Searching across {len(self.DMA_CO_1_ZIPS)} areas...")
+            
+            # Reduce max_results per ZIP
+            per_zip_results = max(3, max_results // len(self.DMA_CO_1_ZIPS))
+            
+            for zip_code in self.DMA_CO_1_ZIPS:
+                print(f"[OfferUp] Searching ZIP: {zip_code}")
+                # Use 100 miles for Denver as requested, 50 for others to ensure coverage
+                dist = 100 if zip_code == "80219" else 50
+                
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    zip_code, per_zip_results, private_sellers_only,
+                    distance=dist
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Standard single location search
+        return self._search_single_location(
+            makes, model, year_min, year_max, price_min, price_max,
+            location, max_results, private_sellers_only
+        )
+    
+    def _search_single_location(self, makes: List[str], model: Optional[str], year_min: Optional[int],
+                               year_max: Optional[int], price_min: Optional[int], price_max: Optional[int],
+                               location: Optional[str], max_results: int, private_sellers_only: bool,
+                               distance: int = 25) -> List[CarListing]:
+        """Helper to search a single location"""
+        all_listings = []
+        
         # Default location if not provided
         if not location:
             location = "33410"  # Default to Palm Beach Gardens, FL
@@ -97,8 +181,7 @@ class OfferUpScraper(BaseScraper):
         # Convert ZIP code to lat/lon
         lat, lon = self._zip_to_lat_lon(location)
         
-        # Default distance
-        distance = 25
+        # Distance is passed as argument (default 25)
         
         # Build search query
         search_query = " ".join(makes)

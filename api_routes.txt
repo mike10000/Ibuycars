@@ -1,0 +1,214 @@
+"""
+API Routes for User Management, Saved Searches, and Assignments
+Add these routes to app.py
+"""
+
+# ==================== USER MANAGEMENT ROUTES ====================
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+@manager_required
+def get_users():
+    """Get all users (manager only)"""
+    import user_db
+    users = user_db.get_all_users()
+    return jsonify(users)
+
+@app.route('/api/users/<int:user_id>/role', methods=['PUT'])
+@login_required
+@manager_required
+def update_user_role_route(user_id):
+    """Update user role (manager only)"""
+    import user_db
+    data = request.get_json()
+    role = data.get('role')
+    
+    if role not in ['manager', 'user']:
+        return jsonify({'error': 'Invalid role'}), 400
+    
+    success = user_db.update_user_role(user_id, role)
+    if success:
+        return jsonify({'message': 'Role updated successfully'})
+    return jsonify({'error': 'Failed to update role'}), 400
+
+@app.route('/api/users/<int:user_id>/deactivate', methods=['PUT'])
+@login_required
+@manager_required
+def deactivate_user_route(user_id):
+    """Deactivate a user (manager only)"""
+    import user_db
+    success = user_db.deactivate_user(user_id)
+    if success:
+        return jsonify({'message': 'User deactivated successfully'})
+    return jsonify({'error': 'Failed to deactivate user'}), 400
+
+# ==================== SAVED SEARCHES ROUTES ====================
+
+@app.route('/api/searches', methods=['GET'])
+@login_required
+def get_searches():
+    """Get all saved searches for current user"""
+    import user_db
+    searches = user_db.get_saved_searches(current_user.db_id)
+    return jsonify(searches)
+
+@app.route('/api/searches', methods=['POST'])
+@login_required
+@manager_required
+def save_search_route():
+    """Save a search query (manager only)"""
+    import user_db
+    data = request.get_json()
+    name = data.get('name')
+    search_params = data.get('search_params')
+    
+    if not name or not search_params:
+        return jsonify({'error': 'Name and search_params required'}), 400
+    
+    search_id = user_db.save_search(current_user.db_id, name, search_params)
+    return jsonify({'id': search_id, 'message': 'Search saved successfully'})
+
+@app.route('/api/searches/<int:search_id>', methods=['DELETE'])
+@login_required
+@manager_required
+def delete_search_route(search_id):
+    """Delete a saved search (manager only)"""
+    import user_db
+    success = user_db.delete_saved_search(search_id, current_user.db_id)
+    if success:
+        return jsonify({'message': 'Search deleted successfully'})
+    return jsonify({'error': 'Failed to delete search'}), 400
+
+@app.route('/api/searches/<int:search_id>/results', methods=['POST'])
+@login_required
+@manager_required
+def rerun_search(search_id):
+    """Re-run a saved search (manager only)"""
+    import user_db
+    search = user_db.get_search_by_id(search_id)
+    
+    if not search:
+        return jsonify({'error': 'Search not found'}), 404
+    
+    # Use the search params to run the search
+    search_params = search['search_params']
+    coordinator = SearchCoordinator()
+    
+    try:
+        results = coordinator.search(
+            makes=search_params.get('makes', []),
+            model=search_params.get('model'),
+            year_min=search_params.get('year_min'),
+            year_max=search_params.get('year_max'),
+            price_min=search_params.get('price_min'),
+            price_max=search_params.get('price_max'),
+            location=search_params.get('location'),
+            max_results=search_params.get('max_results', 20),
+            enable_craigslist=search_params.get('enable_craigslist', True),
+            enable_cars_com=search_params.get('enable_cars_com', True),
+            enable_offerup=search_params.get('enable_offerup', False),
+            enable_autotrader=search_params.get('enable_autotrader', False),
+            enable_facebook=search_params.get('enable_facebook', False),
+            private_sellers_only=search_params.get('private_sellers_only', False)
+        )
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== ASSIGNMENT ROUTES ====================
+
+@app.route('/api/assignments', methods=['GET'])
+@login_required
+def get_assignments():
+    """Get assignments for current user"""
+    import user_db
+    status = request.args.get('status')  # Optional filter
+    assignments = user_db.get_user_assignments(current_user.db_id, status)
+    return jsonify(assignments)
+
+@app.route('/api/assignments', methods=['POST'])
+@login_required
+@manager_required
+def create_assignment_route():
+    """Create a new assignment (manager only)"""
+    import user_db
+    data = request.get_json()
+    
+    search_id = data.get('search_id')
+    listing_url = data.get('listing_url')
+    listing_data = data.get('listing_data')
+    assigned_to = data.get('assigned_to')
+    notes = data.get('notes')
+    
+    if not all([listing_url, listing_data, assigned_to]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    assignment_id = user_db.create_assignment(
+        search_id, listing_url, listing_data, assigned_to, current_user.db_id, notes
+    )
+    return jsonify({'id': assignment_id, 'message': 'Assignment created successfully'})
+
+@app.route('/api/assignments/<int:assignment_id>/status', methods=['PUT'])
+@login_required
+def update_assignment_status_route(assignment_id):
+    """Update assignment status"""
+    import user_db
+    data = request.get_json()
+    status = data.get('status')
+    notes = data.get('notes')
+    
+    if not status:
+        return jsonify({'error': 'Status required'}), 400
+    
+    success = user_db.update_assignment_status(assignment_id, current_user.db_id, status, notes)
+    if success:
+        return jsonify({'message': 'Status updated successfully'})
+    return jsonify({'error': 'Failed to update status'}), 400
+
+@app.route('/api/assignments/<int:assignment_id>/reassign', methods=['PUT'])
+@login_required
+@manager_required
+def reassign_assignment(assignment_id):
+    """Reassign a listing to a different user (manager only)"""
+    import user_db
+    data = request.get_json()
+    new_assignee_id = data.get('assigned_to')
+    
+    if not new_assignee_id:
+        return jsonify({'error': 'assigned_to required'}), 400
+    
+    success = user_db.reassign_listing(assignment_id, new_assignee_id, current_user.db_id)
+    if success:
+        return jsonify({'message': 'Assignment reassigned successfully'})
+    return jsonify({'error': 'Failed to reassign'}), 400
+
+@app.route('/api/assignments/search/<int:search_id>', methods=['GET'])
+@login_required
+@manager_required
+def get_search_assignments_route(search_id):
+    """Get all assignments for a search (manager only)"""
+    import user_db
+    assignments = user_db.get_search_assignments(search_id)
+    return jsonify(assignments)
+
+# ==================== FRONTEND ROUTES ====================
+
+@app.route('/users')
+@login_required
+@manager_required
+def users_page():
+    """User management page (manager only)"""
+    return render_template('users.html')
+
+@app.route('/searches')
+@login_required
+@manager_required
+def searches_page():
+    """Saved searches page (manager only)"""
+    return render_template('saved_searches.html')
+
+@app.route('/my-assignments')
+@login_required
+def assignments_page():
+    """User's assignments page"""
+    return render_template('my_assignments.html')

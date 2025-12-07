@@ -12,11 +12,13 @@ from config import config
 
 class User(UserMixin):
     """User model for Flask-Login"""
-    def __init__(self, id, name, email, picture):
+    def __init__(self, id, name, email, picture, db_id=None, role='user'):
         self.id = id
         self.name = name
         self.email = email
         self.picture = picture
+        self.db_id = db_id  # Database user ID
+        self.role = role  # 'manager' or 'user'
         
     @property
     def is_authenticated(self):
@@ -47,9 +49,16 @@ def load_user(user_id):
             id=user_data.get('id'),
             name=user_data.get('name'),
             email=user_data.get('email'),
-            picture=user_data.get('picture')
+            picture=user_data.get('picture'),
+            db_id=user_data.get('db_id'),
+            role=user_data.get('role', 'user')
         )
     return None
+
+
+def is_manager(user):
+    """Check if user is a manager"""
+    return user and user.role == 'manager'
 
 
 def init_oauth(app):
@@ -95,11 +104,13 @@ def validate_domain(email):
     return domain in config.ALLOWED_DOMAINS
 
 
-def create_user_from_google_info(userinfo):
+def create_user_from_google_info(userinfo, db_id=None, role='user'):
     """Create User object from Google userinfo"""
     return User(
         id=userinfo.get("sub"),
         name=userinfo.get("name"),
         email=userinfo.get("email"),
-        picture=userinfo.get("picture")
+        picture=userinfo.get("picture"),
+        db_id=db_id,
+        role=role
     )

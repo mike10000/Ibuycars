@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Dashboard - iBuyCars</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard-container {
+            padding: 2rem 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            height: 400px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="iBuyCars Logo">
+                </div>
+                <nav class="nav">
+                    <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+                    <a href="{{ url_for('index') }}#search" class="nav-link">Search</a>
+                    <div class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">
+                            <img src="{{ current_user.picture }}" alt="Profile" class="nav-profile-pic">
+                            {{ current_user.name }}
+                        </a>
+                        <div class="dropdown-menu">
+                            <a href="{{ url_for('dashboard') }}" class="dropdown-item">Dashboard</a>
+                            <a href="{{ url_for('assignments_page') }}" class="dropdown-item">My Assignments</a>
+                            <div class="dropdown-divider"></div>
+                            <a href="{{ url_for('logout') }}" class="dropdown-item">Logout</a>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="container dashboard-container">
+        <div class="dashboard-header">
+            <h1>CRM Dashboard</h1>
+            <p>Welcome back, {{ current_user.name }}</p>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Total Leads</span>
+                <span class="stat-value">{{ stats.total }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Calls Made</span>
+                <span class="stat-value">{{ stats.by_status.get('contacted', 0) }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Sales Completed</span>
+                <span class="stat-value">{{ stats.by_status.get('purchased', 0) }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Active Offers</span>
+                <span class="stat-value">${{ "{:,.0f}".format(stats.total_offers_value) }}</span>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-container">
+            <h3>Leads by Status</h3>
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+
+    <script id="status-data" type="application/json">
+        {{ stats.by_status | tojson }}
+    </script>
+    <script>
+        // Data from Flask
+        const statusData = JSON.parse(document.getElementById('status-data').textContent);
+
+        // Prepare Chart Data
+        const labels = Object.keys(statusData);
+        const data = Object.values(statusData);
+        const backgroundColors = [
+            '#E60000', // Primary Red
+            '#333333', // Secondary Dark
+            '#28a745', // Green (Success)
+            '#ffc107', // Yellow (Warning)
+            '#17a2b8', // Cyan (Info)
+            '#6c757d'  // Gray (Secondary)
+        ];
+
+        // Render Chart
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Number of Leads',
+                    data: data,
+                    backgroundColor: backgroundColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

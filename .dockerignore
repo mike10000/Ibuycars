@@ -1,0 +1,17 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+env
+venv
+.env
+.env.example
+*.log
+notes.db
+users.db
+search_results.json
+test_output.txt
+.gemini

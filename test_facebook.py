@@ -1,41 +1,29 @@
-"""
-Test script for Facebook Marketplace scraper
-"""
 from scraper.facebook_scraper import FacebookScraper
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 def test_facebook():
-    """Test Facebook scraper"""
-    print("Testing Facebook Marketplace scraper...")
+    print("Initializing Facebook Scraper...")
     scraper = FacebookScraper()
     
-    # Test actual search
-    print("\nSearching for Toyota in test location...")
+    print("Starting search for 'Honda Civic' in 'Miami, FL'...")
     try:
         results = scraper.search(
-            makes=["Toyota"],
-            location="Miami, FL",
-            max_results=3
+            makes=['Honda'], 
+            model='Civic', 
+            location='Miami, FL', 
+            max_results=5,
+            private_sellers_only=False
         )
-        print(f"Found {len(results)} results")
-        for i, listing in enumerate(results, 1):
-            print(f"\n{i}. {listing.title}")
-            print(f"   Price: {listing.price}")
-            print(f"   Location: {listing.location}")
-            print(f"   Year: {listing.year}")
-            print(f"   URL: {listing.url[:80]}...")
+        
+        print(f"Search finished. Found {len(results)} listings.")
+        for listing in results:
+            print(f"- {listing.title} ({listing.price}) - {listing.url}")
+            
     except Exception as e:
-        print(f"ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    print("="*80)
-    print("FACEBOOK MARKETPLACE SCRAPER TEST")
-    print("="*80)
-    
     test_facebook()
-    
-    print("\n" + "="*80)
-    print("Testing complete!")

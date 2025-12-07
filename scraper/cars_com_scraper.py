@@ -23,6 +23,47 @@ class CarsComScraper(BaseScraper):
         self.base_url = "https://www.cars.com/shopping/results"
         self.use_selenium = use_selenium
         self.driver = None
+        
+        # Los Angeles DMA (DMA-CA-3) ZIP codes representing the counties
+        self.LA_DMA_ZIPS = [
+            "90001",  # Los Angeles
+            "92868",  # Orange County
+            "92346",  # San Bernardino
+            "93003",  # Ventura
+            "93526",  # Inyo (Bishop area)
+        ]
+        
+        # New Jersey DMA (DMA-NJ-1) ZIP codes representing regions statewide
+        self.NJ_DMA_ZIPS = [
+            "07102",  # Newark (Northern NJ)
+            "07302",  # Jersey City (Northern NJ)
+            "08901",  # New Brunswick (Central NJ)
+            "08608",  # Trenton (Central NJ)
+            "08401",  # Atlantic City (Shore)
+            "08701",  # Lakewood (Shore)
+            "08002",  # Cherry Hill (South NJ)
+            "08003",  # Camden (South NJ)
+            "07960",  # Morristown (Northwest NJ)
+        ]
+
+        # Sacramento-Stockton-Modesto DMA (DMA-CA-1)
+        # Representative ZIP codes for each county
+        self.DMA_CA_1_ZIPS = [
+            "95814",  # Sacramento (Sacramento)
+            "95202",  # Stockton (San Joaquin)
+            "95354",  # Modesto (Stanislaus)
+            "95695",  # Woodland (Yolo)
+            "95678",  # Roseville (Placer)
+            "95991",  # Yuba City (Sutter/Yuba)
+            "95667",  # Placerville (El Dorado)
+            "95945",  # Grass Valley (Nevada)
+            "95370",  # Sonora (Tuolumne)
+            "95249",  # San Andreas (Calaveras)
+            "95642",  # Jackson (Amador)
+            "95932",  # Colusa (Colusa)
+            "95971",  # Quincy (Plumas)
+            "95936",  # Downieville (Sierra)
+        ]
     
     def _setup_driver(self):
         """Setup Selenium WebDriver"""
@@ -56,6 +97,93 @@ class CarsComScraper(BaseScraper):
                price_max: Optional[int] = None, location: Optional[str] = None,
                max_results: int = 20, private_sellers_only: bool = False) -> List[CarListing]:
         """Search Cars.com for cars"""
+        all_listings = []
+        
+        # Handle Los Angeles DMA multi-location search
+        if location and location.lower() in ['dma-ca-3', 'los angeles dma']:
+            print(f"[Cars.com] 'Los Angeles DMA' location detected. Searching across {len(self.LA_DMA_ZIPS)} areas...")
+            
+            # Reduce max_results per ZIP
+            per_zip_results = max(3, max_results // len(self.LA_DMA_ZIPS))
+            
+            for zip_code in self.LA_DMA_ZIPS:
+                print(f"[Cars.com] Searching ZIP: {zip_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    zip_code, per_zip_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle New Jersey DMA multi-ZIP search
+        if location and location.strip().lower() in ['dma-nj-1', 'new jersey dma', 'new jersey']:
+            print(f"[Cars.com] 'New Jersey DMA' location detected. Searching across {len(self.NJ_DMA_ZIPS)} areas...")
+            
+            # Reduce max_results per ZIP
+            per_zip_results = max(3, max_results // len(self.NJ_DMA_ZIPS))
+            
+            for zip_code in self.NJ_DMA_ZIPS:
+                print(f"[Cars.com] Searching ZIP: {zip_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    zip_code, per_zip_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle DMA-CA-1 (Sacramento/Stockton/Modesto)
+        if location and location.strip().lower() in ['dma-ca-1', 'sacramento dma']:
+            print(f"[Cars.com] 'DMA-CA-1' location detected. Searching across {len(self.DMA_CA_1_ZIPS)} areas...")
+            
+            # Reduce max_results per ZIP
+            per_zip_results = max(3, max_results // len(self.DMA_CA_1_ZIPS))
+            
+            for zip_code in self.DMA_CA_1_ZIPS:
+                print(f"[Cars.com] Searching ZIP: {zip_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    zip_code, per_zip_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Standard single location search
+        return self._search_single_location(
+            makes, model, year_min, year_max, price_min, price_max,
+            location, max_results, private_sellers_only
+        )
+    
+    def _search_single_location(self, makes: List[str], model: Optional[str], year_min: Optional[int],
+                               year_max: Optional[int], price_min: Optional[int], price_max: Optional[int],
+                               location: Optional[str], max_results: int, private_sellers_only: bool) -> List[CarListing]:
+        """Helper to search a single location"""
         all_listings = []
         
         # Search for each make

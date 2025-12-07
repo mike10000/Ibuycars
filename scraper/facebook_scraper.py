@@ -13,6 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
+from scraper.geocoding_helper import is_within_radius
 
 
 class FacebookScraper(BaseScraper):
@@ -53,6 +54,106 @@ class FacebookScraper(BaseScraper):
                 # Silently fail
                 self.driver = None
     
+    # Major Virginia cities to search when "Virginia" is selected
+    VIRGINIA_LOCATIONS = [
+        "Richmond, VA",
+        "Virginia Beach, VA",
+        "Norfolk, VA",
+        "Fairfax, VA",
+        "Roanoke, VA",
+        "Charlottesville, VA",
+        "Lynchburg, VA",
+        "Alexandria, VA",
+        "Fredericksburg, VA"
+    ]
+    
+    # Los Angeles DMA (DMA-CA-3) counties to search
+    # Using multiple major cities across all 5 counties for comprehensive coverage
+    LA_DMA_LOCATIONS = [
+        # Los Angeles County
+        "Los Angeles, CA",
+        "Long Beach, CA",
+        "Pasadena, CA",
+        "Glendale, CA",
+        # Orange County
+        "Santa Ana, CA",
+        "Anaheim, CA",
+        "Irvine, CA",
+        # San Bernardino County / Inland Empire
+        "San Bernardino, CA",
+        "Riverside, CA",
+        "Fontana, CA",
+        # Ventura County
+        "Ventura, CA",
+        "Oxnard, CA",
+        # Inyo County
+        "Bishop, CA"
+    ]
+    
+    # New Jersey DMA (DMA-NJ-1) - Statewide coverage
+    # Major cities across all regions of NJ
+    NJ_DMA_LOCATIONS = [
+        # Northern NJ
+        "Newark, NJ",
+        "Jersey City, NJ",
+        "Paterson, NJ",
+        "Elizabeth, NJ",
+        "Edison, NJ",
+        # Central NJ
+        "New Brunswick, NJ",
+        "Trenton, NJ",
+        "Princeton, NJ",
+        # Jersey Shore
+        "Atlantic City, NJ",
+        "Asbury Park, NJ",
+        "Long Branch, NJ",
+        # Southern NJ
+        "Camden, NJ",
+        "Cherry Hill, NJ",
+        # Northwestern NJ
+        "Morristown, NJ",
+        "Hackettstown, NJ"
+    ]
+
+    # Sacramento-Stockton-Modesto DMA (DMA-CA-1)
+    # Covers: Amador, El Dorado, Plumas, Sierra, Toulumne, Calaveras, Nevada, 
+    # Sacramento, Stanislaus, Yolo, Colusa, Placer, San Joaquin, Sutter, Yuba
+    DMA_CA_1_LOCATIONS = [
+        "Sacramento, CA",       # Sacramento
+        "Stockton, CA",         # San Joaquin
+        "Modesto, CA",          # Stanislaus
+        "Roseville, CA",        # Placer
+        "Woodland, CA",         # Yolo
+        "Yuba City, CA",        # Sutter/Yuba
+        "Placerville, CA",      # El Dorado
+        "Grass Valley, CA",     # Nevada
+        "Sonora, CA",           # Tuolumne
+        "San Andreas, CA",      # Calaveras
+        "Jackson, CA",          # Amador
+        "Colusa, CA",           # Colusa
+        "Quincy, CA",           # Plumas
+        "Downieville, CA"       # Sierra
+    ]
+
+    # Denver DMA (DMA-CO-1)
+    # Covers: Denver, Boulder, Colorado Springs, Fort Collins and surrounding areas
+    DMA_CO_1_LOCATIONS = [
+        "Denver, CO",
+        "Aurora, CO",
+        "Lakewood, CO",
+        "Thornton, CO",
+        "Arvada, CO",
+        "Westminster, CO",
+        "Centennial, CO",
+        "Boulder, CO",
+        "Colorado Springs, CO",
+        "Fort Collins, CO",
+        "Greeley, CO",
+        "Longmont, CO",
+        "Loveland, CO",
+        "Castle Rock, CO"
+    ]
+
     def search(self, makes: List[str], model: Optional[str] = None, year_min: Optional[int] = None,
                year_max: Optional[int] = None, price_min: Optional[int] = None,
                price_max: Optional[int] = None, location: Optional[str] = None,
@@ -67,9 +168,195 @@ class FacebookScraper(BaseScraper):
         if not self.driver:
             print("Selenium driver not available. Skipping Facebook Marketplace.")
             return all_listings
+            
+        # Handle "Virginia" location by searching multiple cities
+        if location and location.lower() == "virginia":
+            print(f"[Facebook] 'Virginia' location detected. Searching across {len(self.VIRGINIA_LOCATIONS)} major VA cities...")
+            
+            # Reduce max_results per city to avoid overwhelming and keep total count reasonable
+            # But ensure at least a few per city
+            per_city_results = max(3, max_results // 3)
+            
+            for city_loc in self.VIRGINIA_LOCATIONS:
+                print(f"[Facebook] Searching sub-location: {city_loc}")
+                city_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max, 
+                    city_loc, per_city_results, private_sellers_only
+                )
+                all_listings.extend(city_listings)
+                
+                # If we have enough results, stop (optional, but good for speed)
+                if len(all_listings) >= max_results * 2:
+                    break
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+            return unique_listings[:max_results]
+        
+        # Handle "Los Angeles" or "DMA-CA-3" location by searching multiple counties
+        elif location and (location.lower() in ["los angeles", "dma-ca-3"]):
+            print(f"[Facebook] 'Los Angeles DMA' location detected. Searching across {len(self.LA_DMA_LOCATIONS)} counties...")
+            
+            # Reduce max_results per county to avoid overwhelming and keep total count reasonable
+            per_county_results = max(3, max_results // 3)
+            
+            for county_loc in self.LA_DMA_LOCATIONS:
+                print(f"[Facebook] Searching sub-location: {county_loc}")
+                county_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max, 
+                    county_loc, per_county_results, private_sellers_only
+                )
+                all_listings.extend(county_listings)
+                
+                # If we have enough results, stop (optional, but good for speed)
+                if len(all_listings) >= max_results * 2:
+                    break
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+            return unique_listings[:max_results]
+        
+        # Handle "New Jersey" or "DMA-NJ-1" location by searching multiple cities statewide
+        elif location and (location.strip().lower() in ["new jersey", "dma-nj-1", "new jersey dma"]):
+            print(f"[Facebook] 'New Jersey DMA' location detected. Searching across {len(self.NJ_DMA_LOCATIONS)} cities...") 
+            
+            # Reduce max_results per city
+            per_city_results = max(3, max_results // 3)
+            
+            for city_loc in self.NJ_DMA_LOCATIONS:
+                print(f"[Facebook] Searching sub-location: {city_loc}")
+                city_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    city_loc, per_city_results, private_sellers_only
+                )
+                all_listings.extend(city_listings)
+                
+                # If we have enough results, stop
+                if len(all_listings) >= max_results * 2:
+                    break
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+            return unique_listings[:max_results]
+        
+        # Handle "DMA-CA-1" (Sacramento/Stockton/Modesto)
+        elif location and (location.strip().lower() in ["dma-ca-1", "sacramento dma"]):
+            print(f"[Facebook] 'DMA-CA-1' location detected. Searching across {len(self.DMA_CA_1_LOCATIONS)} cities...")
+            
+            # Reduce max_results per city
+            per_city_results = max(3, max_results // 4) # Slightly more per city as list is long
+            
+            for city_loc in self.DMA_CA_1_LOCATIONS:
+                print(f"[Facebook] Searching sub-location: {city_loc}")
+                city_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    city_loc, per_city_results, private_sellers_only
+                )
+                all_listings.extend(city_listings)
+                
+                # If we have enough results, stop
+                if len(all_listings) >= max_results * 2:
+                    break
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+            return unique_listings[:max_results]
+
+        # Handle "DMA-CO-1" (Denver DMA)
+        elif location and (location.strip().lower() in ["dma-co-1", "denver dma"]):
+            print(f"[Facebook] 'DMA-CO-1' location detected. Searching across {len(self.DMA_CO_1_LOCATIONS)} cities...")
+            
+            # Reduce max_results per city
+            per_city_results = max(3, max_results // 4)
+            
+            for city_loc in self.DMA_CO_1_LOCATIONS:
+                print(f"[Facebook] Searching sub-location: {city_loc}")
+                city_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    city_loc, per_city_results, private_sellers_only
+                )
+                all_listings.extend(city_listings)
+                
+                # If we have enough results, stop
+                if len(all_listings) >= max_results * 2:
+                    break
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+            return unique_listings[:max_results]
+
+        else:
+            # Standard single location search
+            results = self._search_single_location(
+                makes, model, year_min, year_max, price_min, price_max, 
+                location, max_results, private_sellers_only
+            )
+            
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+                
+            return results
+
+    def _search_single_location(self, makes: List[str], model: Optional[str], year_min: Optional[int],
+                               year_max: Optional[int], price_min: Optional[int], price_max: Optional[int],
+                               location: Optional[str], max_results: int, private_sellers_only: bool) -> List[CarListing]:
+        """Helper to search a single location"""
+        self._setup_driver()
+        all_listings = []
         
         # Search for each make
         for make in makes:
+            # Skip empty makes - they don't work well with Facebook
+            if not make or not make.strip():
+                print(f"[Facebook] Skipping empty make - using generic 'cars' search instead")
+                make = "cars"
+            
             try:
                 # Build search query
                 query = make
@@ -141,21 +428,36 @@ class FacebookScraper(BaseScraper):
                 
                 for elem in listing_elements[:max_results]:
                     try:
+                        # Skip None elements
+                        if elem is None:
+                            continue
+                        
                         # Extract title
                         title = ""
-                        title_elem = elem.find_element(By.CSS_SELECTOR, 
-                            'span[dir="auto"]')
-                        if title_elem:
-                            title = self.clean_text(title_elem.text)
+                        try:
+                            title_elem = elem.find_element(By.CSS_SELECTOR, 'span[dir="auto"]')
+                            if title_elem:
+                                title = self.clean_text(title_elem.text)
+                        except:
+                            pass
                         
                         # Extract URL
-                        url = elem.get_attribute('href') or ""
+                        if not elem:
+                            continue
+                        
+                        try:
+                            url = elem.get_attribute('href') or ""
+                        except:
+                            url = ""
+                        
+                        # Skip if no URL
+                        if not url:
+                            continue
                         
                         # Extract price
                         price = "N/A"
                         try:
-                            price_elem = elem.find_element(By.CSS_SELECTOR, 
-                                'span[dir="auto"]:last-child')
+                            price_elem = elem.find_element(By.CSS_SELECTOR, 'span[dir="auto"]:last-child')
                             if price_elem:
                                 price_text = price_elem.text
                                 if '$' in price_text:
@@ -167,12 +469,11 @@ class FacebookScraper(BaseScraper):
                         location_text = "N/A"
                         try:
                             # Try multiple selectors for location
-                            # Facebook shows location in different ways
                             location_selectors = [
                                 'span[class*="location"]',
                                 'span:contains("miles away")',
                                 'div[class*="location"] span',
-                                'span[dir="auto"]'  # Sometimes location is in a span with dir="auto"
+                                'span[dir="auto"]'
                             ]
                             
                             for selector in location_selectors:
@@ -180,13 +481,8 @@ class FacebookScraper(BaseScraper):
                                     loc_elems = elem.find_elements(By.CSS_SELECTOR, selector)
                                     for loc_elem in loc_elems:
                                         text = self.clean_text(loc_elem.text)
-                                        # Check if this looks like a location (contains city/state or "miles away")
-                                        if text and (
-                                            'miles away' in text.lower() or 
-                                            ',' in text or  # City, State format
-                                            len(text.split()) <= 4  # Short location text
-                                        ):
-                                            # Skip if it's a price or title
+                                        # Check if this looks like a location
+                                        if text and ('miles away' in text.lower() or ',' in text or len(text.split()) <= 4):
                                             if '$' not in text and not re.search(r'\b(19|20)\d{2}\b', text):
                                                 location_text = text
                                                 break
@@ -195,13 +491,11 @@ class FacebookScraper(BaseScraper):
                                 except:
                                     continue
                             
-                            # If still no location found, use the search location
                             if location_text == "N/A" and location:
                                 location_text = location
                         except:
                             if location:
                                 location_text = location
-                        
                         
                         # Extract year from title
                         year = ""
@@ -212,7 +506,6 @@ class FacebookScraper(BaseScraper):
                         # Extract image
                         image_url = ""
                         try:
-                            # Try to find image element
                             img_elem = elem.find_element(By.TAG_NAME, 'img')
                             if img_elem:
                                 image_url = img_elem.get_attribute('src') or ""
@@ -240,44 +533,24 @@ class FacebookScraper(BaseScraper):
                 continue
         
         # Filter results by location if specified
-        # Facebook's URL parameters don't always work, so we filter after fetching
         if location and all_listings:
             filtered_listings = []
-            target_state = None
-            target_city = None
             
-            # Extract target location info
-            # Try to extract city and state from location string
-            city_name = None
-            state_code = None
+            # Determine radius based on search type
+            # DMA searches cover larger areas, so use larger radius
+            # Also use 100 miles for Denver as requested
+            radius = 100.0 if "dma" in location.lower() or "denver" in location.lower() else 50.0
             
-            city_state_match = re.search(r'([A-Za-z\s]+),?\s+([A-Z]{2})', location)
-            if city_state_match:
-                city_name = city_state_match.group(1).strip().lower()
-                state_code = city_state_match.group(2).upper()
-            
-            if state_code:
-                target_state = state_code.upper()
-            if city_name:
-                target_city = city_name.lower()
-            
-            print(f"[Facebook] Filtering {len(all_listings)} results for location: {location}")
+            print(f"[Facebook] Filtering {len(all_listings)} results for location: {location} (radius: {radius} miles)")
             
             for listing in all_listings:
-                # Check if listing location matches target
-                listing_loc = listing.location.lower()
-                
-                # Only filter out obvious wrong states (mainly California when not searching there)
-                # Be less aggressive to allow more results through
-                if target_state and target_state.upper() not in ['CA', 'CALIFORNIA']:
-                    # If we're NOT searching in California, exclude CA results
-                    if 'california' in listing_loc or ', ca' in listing_loc:
-                        print(f"[Facebook] Dropping result from California: {listing.title} ({listing.location})")
-                        continue
-                
-                # Otherwise, keep the listing
-                # print(f"[Facebook] Keeping result: {listing.title} ({listing.location})")
-                filtered_listings.append(listing)
+                # Use geocoding to check if listing is within radius
+                # This handles "San Francisco" vs "Sacramento" correctly
+                if is_within_radius(location, listing.location, max_miles=radius):
+                    filtered_listings.append(listing)
+                else:
+                    # print(f"[Facebook] Dropping result: {listing.location} is too far from {location}")
+                    pass
             
             print(f"[Facebook] Filtered to {len(filtered_listings)} results matching location")
             all_listings = filtered_listings
@@ -288,8 +561,6 @@ class FacebookScraper(BaseScraper):
             for i, listing in enumerate(all_listings[:3]):
                 print(f"[Facebook] Result {i+1} location: {listing.location}")
         
-        if self.driver:
-            self.driver.quit()
-            self.driver = None
+
         
         return all_listings

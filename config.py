@@ -24,6 +24,9 @@ class Config:
     # Allowed email domains (comma-separated)
     ALLOWED_DOMAINS = os.getenv('ALLOWED_DOMAINS', 'ibuycars.com').split(',')
     
+    # Manager emails (comma-separated)
+    MANAGER_EMAILS = os.getenv('MANAGER_EMAILS', '').split(',') if os.getenv('MANAGER_EMAILS') else []
+    
     # Session configuration
     SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
     SESSION_COOKIE_HTTPONLY = True

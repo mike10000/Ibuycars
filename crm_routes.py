@@ -7,6 +7,7 @@ from crm_db import (
     get_leads_with_filters, save_lead, update_lead_status, 
     get_leads_stats
 )
+from db_config import get_placeholder
 
 def get_db():
     """Get database connection from Flask g object"""
@@ -61,9 +62,10 @@ def api_update_follow_up(lead_id):
         follow_up_date = data.get('followUpDate')
         
         db = get_db()
-        db.execute('''
-            UPDATE leads SET follow_up_date = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+        ph = get_placeholder()
+        db.execute(f'''
+            UPDATE leads SET follow_up_date = {ph}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = {ph}
         ''', (follow_up_date, lead_id))
         db.commit()
         
@@ -75,7 +77,8 @@ def api_delete_lead(lead_id):
     """DELETE /api/leads/<id> - Delete a lead"""
     try:
         db = get_db()
-        db.execute('DELETE FROM leads WHERE id = ?', (lead_id,))
+        ph = get_placeholder()
+        db.execute(f'DELETE FROM leads WHERE id = {ph}', (lead_id,))
         db.commit()
         return jsonify({'success': True})
     except Exception as e:

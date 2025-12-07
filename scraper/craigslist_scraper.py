@@ -47,6 +47,43 @@ class CraigslistScraper(BaseScraper):
             'portland': 'portland',
             'sacramento': 'sacramento',
         }
+        
+        # Los Angeles DMA (DMA-CA-3) counties to search
+        self.LA_DMA_LOCATIONS = [
+            'inlandempire',  # San Bernardino/Riverside
+            'losangeles',
+            'orangecounty',
+            'ventura',
+        ]
+        
+        # New Jersey DMA (DMA-NJ-1) - Statewide coverage
+        # Craigslist regions covering NJ
+        self.NJ_DMA_LOCATIONS = [
+            'newjersey',     # South & Central NJ
+            'jerseyshore',   # Jersey Shore
+            'cnj',           # Central NJ
+            'southjersey',   # South Jersey
+        ]
+
+        # Sacramento-Stockton-Modesto DMA (DMA-CA-1)
+        # Covers: Amador, El Dorado, Plumas, Sierra, Toulumne, Calaveras, Nevada, 
+        # Sacramento, Stanislaus, Yolo, Colusa, Placer, San Joaquin, Sutter, Yuba
+        self.DMA_CA_1_LOCATIONS = [
+            'sacramento',    # Sacramento, Placer, Yolo, El Dorado, Amador
+            'stockton',      # San Joaquin
+            'modesto',       # Stanislaus
+            'goldcountry',   # Amador, Calaveras, Nevada, Placer, Sierra, Tuolumne
+            'yubasutter',    # Yuba, Sutter, Colusa
+        ]
+
+        # Denver DMA (DMA-CO-1)
+        self.DMA_CO_1_LOCATIONS = [
+            'denver',
+            'boulder',
+            'cosprings',
+            'fortcollins',
+            'rockies',
+        ]
     
     def _normalize_location(self, location: str) -> str:
         """Convert location name to Craigslist location code"""
@@ -128,8 +165,118 @@ class CraigslistScraper(BaseScraper):
         """Search Craigslist for cars"""
         all_listings = []
         
-        # Normalize location
+        # Handle Los Angeles DMA multi-location search
+        if location and location.lower() in ['dma-ca-3', 'los angeles dma']:
+            print(f"[Craigslist] 'Los Angeles DMA' location detected. Searching across {len(self.LA_DMA_LOCATIONS)} areas...")
+            
+            # Reduce max_results per location
+            per_location_results = max(3, max_results // len(self.LA_DMA_LOCATIONS))
+            
+            for loc_code in self.LA_DMA_LOCATIONS:
+                print(f"[Craigslist] Searching sub-location: {loc_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    loc_code, per_location_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle New Jersey DMA multi-location search
+        if location and location.strip().lower() in ['dma-nj-1', 'new jersey dma', 'new jersey']:
+            print(f"[Craigslist] 'New Jersey DMA' location detected. Searching across {len(self.NJ_DMA_LOCATIONS)} areas...")
+            
+            # Reduce max_results per location
+            per_location_results = max(3, max_results // len(self.NJ_DMA_LOCATIONS))
+            
+            for loc_code in self.NJ_DMA_LOCATIONS:
+                print(f"[Craigslist] Searching sub-location: {loc_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    loc_code, per_location_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle DMA-CA-1 (Sacramento/Stockton/Modesto)
+        if location and location.strip().lower() in ['dma-ca-1', 'sacramento dma']:
+            print(f"[Craigslist] 'DMA-CA-1' location detected. Searching across {len(self.DMA_CA_1_LOCATIONS)} areas...")
+            
+            # Reduce max_results per location
+            per_location_results = max(3, max_results // len(self.DMA_CA_1_LOCATIONS))
+            
+            for loc_code in self.DMA_CA_1_LOCATIONS:
+                print(f"[Craigslist] Searching sub-location: {loc_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    loc_code, per_location_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+        
+        # Handle DMA-CO-1 (Denver)
+        if location and location.strip().lower() in ['dma-co-1', 'denver dma']:
+            print(f"[Craigslist] 'DMA-CO-1' location detected. Searching across {len(self.DMA_CO_1_LOCATIONS)} areas...")
+            
+            # Reduce max_results per location
+            per_location_results = max(3, max_results // len(self.DMA_CO_1_LOCATIONS))
+            
+            for loc_code in self.DMA_CO_1_LOCATIONS:
+                print(f"[Craigslist] Searching sub-location: {loc_code}")
+                location_listings = self._search_single_location(
+                    makes, model, year_min, year_max, price_min, price_max,
+                    loc_code, per_location_results, private_sellers_only
+                )
+                all_listings.extend(location_listings)
+            
+            # Deduplicate by URL
+            unique_listings = []
+            seen_urls = set()
+            for listing in all_listings:
+                if listing.url not in seen_urls:
+                    seen_urls.add(listing.url)
+                    unique_listings.append(listing)
+            
+            return unique_listings[:max_results]
+
+        # Standard single location search
         location_code = self._normalize_location(location)
+        return self._search_single_location(
+            makes, model, year_min, year_max, price_min, price_max,
+            location_code, max_results, private_sellers_only
+        )
+    
+    def _search_single_location(self, makes: List[str], model: Optional[str], year_min: Optional[int],
+                               year_max: Optional[int], price_min: Optional[int], price_max: Optional[int],
+                               location_code: str, max_results: int, private_sellers_only: bool) -> List[CarListing]:
+        """Helper to search a single location"""
+        all_listings = []
         
         # Search for each make
         for make in makes:
